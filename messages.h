@@ -8,7 +8,7 @@ std::vector<unsigned char> returnEtalonData();
 std::string createMessage();
 void sendMWSSMessage(std::string params);
 
-int initConnection(int Port, std::string IP);
+boost::asio::ip::tcp::socket *initConnection(int Port, std::string IP);
 void closeSocketConnection();
 
 void moveChassie(int speed_L, int speed_R, int time, bool flag);
