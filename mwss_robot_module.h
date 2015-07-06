@@ -8,14 +8,14 @@
 class mwssRobot : public Robot {
 public:
 	bool is_locked;
-	SOCKET robot_socket;
+	boost::asio::ip::tcp::socket *robot_socket;
 
 	//MotorState *temp;
 	std::vector<unsigned char*> *Motors_state_vector;
 	std::vector<unsigned char> Motors_state_etalon;
 
 	std::vector<variable_value> axis_state;
-	mwssRobot(SOCKET robot_socket) : is_locked(false){};
+	mwssRobot(boost::asio::ip::tcp::socket *robot_socket) : is_locked(false){};
 	FunctionResult* executeFunction(system_value command_index, void **args);
 	void axisControl(system_value axis_index, variable_value value);
 	~mwssRobot() {};
@@ -29,6 +29,7 @@ class mwssRobotModule : public RobotModule{
 #else
 	pthread_mutex_t mwssRM_cs;
 #endif
+	boost::mutex mwssRM_mtx;
 	m_connections aviable_connections;
 	FunctionData **mwssrobot_functions;
 	AxisData **robot_axis;
@@ -39,7 +40,7 @@ class mwssRobotModule : public RobotModule{
 
 	bool is_aviable;
 
-	SOCKET robot_module_socket;
+	boost::asio::ip::tcp::socket *robot_module_socket;
 
 public:
 	mwssRobotModule();

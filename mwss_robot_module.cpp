@@ -5,11 +5,15 @@
 */
 #ifdef _WIN32
 	#define _CRT_SECURE_NO_WARNINGS 
-	#define _SCL_SECURE_NO_WARNINGS
 #endif
 
 #include <string>
 #include <vector>
+
+#include <iostream>
+
+#include <boost\asio.hpp>
+#include <boost\thread\mutex.hpp>
 
 #ifdef _WIN32
 	#include <windows.h>
@@ -26,18 +30,8 @@
 #include "robot_module.h"
 #include "mwss_robot_module.h"
 
-
 #ifdef _WIN32
 	EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-	// Critical Atom_section
-	#define DEFINE_ATOM(ATOM_NAME) CRITICAL_SECTION ATOM_NAME;
-	#define ATOM_LOCK(ATOM_NAME) EnterCriticalSection( &ATOM_NAME );
-	#define ATOM_UNLOCK(ATOM_NAME) LeaveCriticalSection( &ATOM_NAME );
-#else
-	// Critical Atom_section
-	#define DEFINE_ATOM(ATOM_NAME) pthread_mutex_t ATOM_NAME = PTHREAD_MUTEX_INITIALIZER;
-	#define ATOM_LOCK(ATOM_NAME) pthread_mutex_lock( &ATOM_NAME );
-	#define ATOM_UNLOCK(ATOM_NAME) pthread_mutex_unlock( &ATOM_NAME );
 #endif
 
 /////////
@@ -111,6 +105,8 @@ FunctionData** mwssRobotModule::getFunctions(unsigned int *count_functions) {
 }
 
 int mwssRobotModule::init(){
+	mwssRM_mtx.initialize();
+
 	CSimpleIniA ini;
 #ifdef _WIN32
 	InitializeCriticalSection(&mwssRM_cs);
@@ -165,9 +161,9 @@ int mwssRobotModule::init(){
 	return 0;
 };
 
-//////////  / / / // / / // / / / // // / // / / / Нужно переделать под динамическое подключение
+//////////////
 Robot* mwssRobotModule::robotRequire(){
-	ATOM_LOCK(mwssRM_cs);
+	mwssRM_mtx.lock();
 	if (is_aviable && aviable_connections.empty()){
 		robot_module_socket = initConnection(port, IP);
 		mwssRobot *mwss_robot = new mwssRobot(robot_module_socket);
@@ -175,23 +171,23 @@ Robot* mwssRobotModule::robotRequire(){
 		mwss_robot->Motors_state_etalon = returnEtalonData();
 		aviable_connections.push_back(mwss_robot);
 		Robot *robot = mwss_robot;
-		ATOM_UNLOCK(mwssRM_cs);
+		mwssRM_mtx.unlock();
 		is_aviable = false;
 		return robot;
 	}
 	else if (is_aviable && !aviable_connections.empty()) {
 		Robot *robot = aviable_connections[0];
-		ATOM_UNLOCK(mwssRM_cs);
+		mwssRM_mtx.unlock();
 		robot_module_socket = initConnection(port, IP);
 		is_aviable = false;
 		return robot;
 	}
-	ATOM_UNLOCK(mwssRM_cs);
+	mwssRM_mtx.unlock();
 	return NULL;
 };
 
 void mwssRobotModule::robotFree(Robot *robot){
-	ATOM_LOCK(mwssRM_cs);
+	mwssRM_mtx.lock();
 	mwssRobot *mwss_robot = reinterpret_cast<mwssRobot*>(robot);
 	for (m_connections::iterator i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
 		if (mwss_robot == *i){
@@ -201,13 +197,14 @@ void mwssRobotModule::robotFree(Robot *robot){
 		};
 	}
 	is_aviable = true;
-	ATOM_UNLOCK(mwssRM_cs);
+	mwssRM_mtx.unlock();
 	closeSocketConnection();
 };
 
 void mwssRobotModule::final(){
 	aviable_connections.clear();
 	closeSocketConnection();
+	mwssRM_mtx.destroy();
 };
 
 void mwssRobotModule::destroy() {
@@ -340,9 +337,6 @@ void mwssRobot::axisControl(system_value axis_index, variable_value value){
 			Motors_state_etalon[i] = *((*Motors_state_vector)[i]);
 		}
 	}
-
-	// Блок проверки изменилась ли по сравнению с предыдущим состоянием и отправлять либо не отправлять
-
 };
 
 void *mwssRobotModule::writePC(unsigned int *buffer_length) {
@@ -357,7 +351,7 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 	variable_value rez = 0;
 	try {
 		switch (functionId) {
-		case 1: { // spawn
+		case 1: { // moveChassie
 			variable_value *input1 = (variable_value *)args[0];
 			variable_value *input2 = (variable_value *)args[1];
 			variable_value *input3 = (variable_value *)args[2];
@@ -366,7 +360,7 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			moveChassie((int)*input1, (int)*input2, (int)*input3, (bool)*input4);
 			break;
 		}
-		case 2: { // move 
+		case 2: { // moveTurrel
 			std::string input1((const char *)args[0]);
 			variable_value *input2 = (variable_value *)args[1];
 			variable_value *input3 = (variable_value *)args[2];
@@ -374,7 +368,7 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			moveTurrel(input1, (int)*input2, (int)*input3, (bool)*input4);
 			break;
 		}
-		case 3: { // change Color
+		case 3: { // fireWeapon
 			std::string input1((const char *)args[0]);
 			variable_value *input2 = (variable_value *)args[1];
 			variable_value *input3 = (variable_value *)args[2];
