@@ -10,8 +10,6 @@
 #include <string>
 #include <vector>
 
-#include <iostream>
-
 #include <boost\chrono.hpp>
 #include <boost\asio.hpp>
 #include <boost\thread.hpp>
@@ -35,86 +33,39 @@
 	EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
-/////// Блок объявления сервисных функций и структур
-struct MotorState;
-struct request;
-
-//////////// Service FUNCTIONS and STRUCTURES
-struct request
-{
-	int new_speed;  // Новая скорость
-	int time;	    // Время сколько будет спать поток
-	bool flag;      // Флаг возвращения управления
-	MotorState *motor; // Указатель на request *req в структуре MOtorState.. Нет, это указательна структуру Motor state.
-	request *next_request;
-};
-
-//Пусть есть структура для мотора :
-struct	MotorState {
-	int now_state; // Скорость  speed
-	request *req;  // указатель на структуру запроса, изначально NULL
-};
-
-unsigned char *createMessage();
-void sendMWSSMessage(unsigned char *params);
-
-void moveChassie(int speed_L, int speed_R, int time, bool flag);
-void moveTurrel(std::string motor, int speed, int time, bool flag);
-void fireWeapon(std::string motor, bool enabled, int time, bool flag);
-
 ///////// Global Variables
 const unsigned int COUNT_mwssRobot_FUNCTIONS = 3;
 const unsigned int COUNT_AXIS = 8;
 boost::system::error_code ec;
-std::vector<MotorState *> Motors_state_vector;
-boost::mutex g_mtx_;
-
-unsigned char   LeftMotorTurrelRelay,
-				RightMotorTurrelRelay,
-				DownMotorTurrelRelay,
-				LeftMotorChassisRelay,
-				RightMotorChassisRelay,
-				LeftMotorTurrelPWM,
-				RightMotorTurrelPWM,
-				DownMotorTurrelPWM,
-				LeftMotorChassisPWM,
-				RightMotorChassisPWM,
-				LeftWeaponRelay,
-				RightWeaponRelay,
-				LeftMotorTurrelPWM_scaler = 5,
-				RightMotorTurrelPWM_scaler = 5,
-				DownMotorTurrelPWM_scaler = 9,
-				LeftMotorChassisPWM_scaler = 15,
-				RightMotorChassisPWM_scaler = 15;
-
 
 //// Threads
-int SleeperThread(request *arg){
-	g_mtx_.lock();
+void mwssRobot::robotSleeperThread(request *arg){
+	robot_motors_state_mtx.lock();
 	if (arg->next_request != NULL){
 		arg->next_request->motor->now_state = arg->next_request->new_speed;
 	}
 	arg->motor->now_state = arg->new_speed;
-	g_mtx_.unlock();
+	// Отправляем сообщение мотору работать
+	sendMessage(createMessage());
+	robot_motors_state_mtx.unlock();
 	// Sleep specified time
 	boost::this_thread::sleep_for(boost::chrono::milliseconds(arg->time));
-
+	robot_motors_state_mtx.lock();
 	if (arg->motor->req == arg) {
-		g_mtx_.lock();
 		//Меняем информацию в массиве Motors_state_vector
 		arg->motor->now_state = 0;
 		if (arg->next_request != NULL){
 			arg->next_request->motor->now_state = 0;
 		}
 		// Должны отправит сообщение о том что наш мотор должен остановиться
-		sendMWSSMessage(createMessage());
-		g_mtx_.unlock();
+		sendMessage(createMessage());
 	}
-
+	robot_motors_state_mtx.unlock();
+	if (arg->next_request != NULL){
+		delete arg->next_request;
+	}
 	delete arg;
-	return 0;
 }
-
 
 //// MACROS
 #define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
@@ -123,7 +74,7 @@ robot_axis[axis_id]->axis_index = axis_id + 1; \
 robot_axis[axis_id]->upper_value = UPPER_VALUE; \
 robot_axis[axis_id]->lower_value = LOWER_VALUE; \
 robot_axis[axis_id]->name = AXIS_NAME; \
-axis_id++;
+axis_id++; 
 
 #define DEFINE_ALL_AXIS \
 ADD_ROBOT_AXIS("locked", 1, 0)\
@@ -134,7 +85,6 @@ ADD_ROBOT_AXIS("RotateLeftWeapone", 100, -100)\
 ADD_ROBOT_AXIS("RotateRightWeapone", 100, -100)\
 ADD_ROBOT_AXIS("FireLeftWeapone", 1, 0)\
 ADD_ROBOT_AXIS("FireRightWeapone", 1, 0);
-
 
 mwssRobotModule::mwssRobotModule() {
 	mwssrobot_functions = new FunctionData*[COUNT_mwssRobot_FUNCTIONS];
@@ -166,12 +116,13 @@ mwssRobotModule::mwssRobotModule() {
 
 	mwssrobot_functions[function_id] = new FunctionData(function_id + 1, 4, Params, "fireWeapon");
 
+	robot_axis = new AxisData*[COUNT_AXIS];
 	system_value axis_id = 0;
 	DEFINE_ALL_AXIS
 };
 
-void mwssRobotModule::prepare(colorPrintf_t *colorPrintf_p, colorPrintfVA_t *colorPrintfVA_p) {
-	colorPrintf = colorPrintf_p;
+void mwssRobotModule::prepare(colorPrintfModule_t *colorPrintf_p, colorPrintfModuleVA_t *colorPrintfVA_p) {
+	this->colorPrintf_p = colorPrintf_p;
 }
 
 const char* mwssRobotModule::getUID() {
@@ -186,15 +137,8 @@ FunctionData** mwssRobotModule::getFunctions(unsigned int *count_functions) {
 int mwssRobotModule::init(){
 	mwssRM_mtx.initialize();
 
-	for (int i = 0; i < 7; i++){
-		Motors_state_vector[i] = new MotorState;
-		Motors_state_vector[i]->now_state = 0;
-		Motors_state_vector[i]->req = NULL;
-	}
-
 	CSimpleIniA ini;
 #ifdef _WIN32
-	InitializeCriticalSection(&mwssRM_cs);
 	ini.SetMultiKey(true);
 
 	WCHAR DllPath[MAX_PATH] = { 0 };
@@ -210,8 +154,6 @@ int mwssRobotModule::init(){
 	char ConfigPath[MAX_PATH] = { 0 };
 	wcstombs(ConfigPath, wConfigPath, sizeof(ConfigPath));
 #else
-	pthread_mutex_init(&mwssRM_cs, NULL);
-
 	Dl_info PathToSharedObject;
 	void * pointer = reinterpret_cast<void*> (getRobotModuleObject);
 	dladdr(pointer, &PathToSharedObject);
@@ -225,7 +167,7 @@ int mwssRobotModule::init(){
 	const char* ConfigPath = dltemp.c_str();
 #endif
 	if (ini.LoadFile(ConfigPath) < 0) {
-		colorPrintf(this, ConsoleColor(ConsoleColor::red), "Can't load '%s' file!\n", ConfigPath);
+		colorPrintf(ConsoleColor(ConsoleColor::red), "Can't load '%s' file!\n", ConfigPath);
 		return 1;
 	}
 
@@ -237,7 +179,7 @@ int mwssRobotModule::init(){
 	CSimpleIniA::TNamesDepend::const_iterator ini_value;
 
 	for (ini_value = values.begin(); ini_value != values.end(); ++ini_value) {
-		colorPrintf(this, ConsoleColor(ConsoleColor::white), "Attemp to connect: %s\n", ini_value->pItem);
+		colorPrintf(ConsoleColor(ConsoleColor::white), "Attemp to connect: %s\n", ini_value->pItem);
 		port = atoi(ini_value->pItem);
 		IP = IP_ini.begin()->pItem;
 	}
@@ -249,7 +191,6 @@ int mwssRobotModule::init(){
 	return 0;
 };
 
-//////////////
 Robot* mwssRobotModule::robotRequire(){
 	mwssRM_mtx.lock();
 	for (auto i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
@@ -316,9 +257,6 @@ void mwssRobotModule::destroy() {
 	for (unsigned int j = 0; j < COUNT_AXIS; ++j) {
 		delete robot_axis[j];
 	}
-	for (unsigned int j = 0; j < 7; ++j) {
-		delete robot_axis[j];
-	}
 	delete[] robot_axis;
 	delete[] mwssrobot_functions;
 	delete this;
@@ -337,89 +275,84 @@ void mwssRobot::axisControl(system_value axis_index, variable_value value){
 		break;
 	}
 	case 2:{ // MoveChassie
-
 		if (!is_locked){
 			if (value >= 0) {
-				*((*Motors_state_vector)[3]) = 0;
-				*((*Motors_state_vector)[4]) = 0;
+				command_for_robot[4] = 0;
+				command_for_robot[5] = 0;
 			}
 			else {
-				*((*Motors_state_vector)[3]) = 1;
-				*((*Motors_state_vector)[4]) = 1;
+				command_for_robot[4] = 1;
+				command_for_robot[5] = 1;
 			}
-			*((*Motors_state_vector)[8]) = (int)abs(value);
-			*((*Motors_state_vector)[9]) = (int)abs(value);
+			command_for_robot[9] = (int)abs(value);
+			command_for_robot[10] = (int)abs(value);
 		}
 		break;
 	}
 	case 3:{ // RotateChassie
-
 		if (!is_locked){
 			if (value > 0) {
-				*((*Motors_state_vector)[3]) = 1;
-				*((*Motors_state_vector)[4]) = 0;
+				command_for_robot[4] = 1;
+				command_for_robot[5] = 0;
 			}
 			else if (value = 0){
-				*((*Motors_state_vector)[3]) = 0;
-				*((*Motors_state_vector)[4]) = 0;
+				command_for_robot[4] = 0;
+				command_for_robot[5] = 0;
 			}
 			else {
-				*((*Motors_state_vector)[3]) = 0;
-				*((*Motors_state_vector)[4]) = 1;
+				command_for_robot[4] = 0;
+				command_for_robot[5] = 1;
 			}
-			*((*Motors_state_vector)[8]) = (int)abs(value);
-			*((*Motors_state_vector)[9]) = (int)abs(value);
+			command_for_robot[9] = (int)abs(value);
+			command_for_robot[10] = (int)abs(value);
 		}
 		break;
 	}
 	case 4:{ // RotateTurrel
 		if (!is_locked){
-
 			if (value >= 0) {
-				*((*Motors_state_vector)[0]) = 0;
+				command_for_robot[3] = 0;
 			}
 			else {
-				*((*Motors_state_vector)[0]) = 1;
+				command_for_robot[3] = 1;
 			}
-			*((*Motors_state_vector)[5]) = (int)abs(value);
+			command_for_robot[3] = (int)abs(value);
 		}
 		break;
 	}
 	case 5:{ // RotateLeftWeapone
 		if (!is_locked){
-
 			if (value >= 0) {
-				*((*Motors_state_vector)[1]) = 0;
+				command_for_robot[1] = 0;
 			}
 			else {
-				*((*Motors_state_vector)[1]) = 1;
+				command_for_robot[1] = 1;
 			}
-			*((*Motors_state_vector)[6]) = (int)abs(value);
+			command_for_robot[1] = (int)abs(value);
 		}
 		break;
 	}
 	case 6:{ // RotateRightWeapone
 		if (!is_locked){
-
 			if (value >= 0) {
-				*((*Motors_state_vector)[2]) = 0;
+				command_for_robot[2] = 0;
 			}
 			else {
-				*((*Motors_state_vector)[2]) = 1;
+				command_for_robot[2] = 1;
 			}
-			*((*Motors_state_vector)[7]) =(int) abs(value);
+			command_for_robot[2] = (int)abs(value);
 		}
 		break;
 	}
 	case 7:{ // FireLeftWeapone
 		if (!is_locked){
-			*((*Motors_state_vector)[10]) = (value) ? 1 : 0;
+			command_for_robot[11] = (value) ? 1 : 0;
 		}
 		break;
 	}
 	case 8:{ // FireRightWeapone
 		if (!is_locked){
-			*((*Motors_state_vector)[11]) = (value) ? 1 : 0;
+			command_for_robot[12] = (value) ? 1 : 0;
 		}
 		break;
 	}
@@ -429,18 +362,19 @@ void mwssRobot::axisControl(system_value axis_index, variable_value value){
 
 	bool is_similar_flag = true;
 
-	for (int i = 0; i<12; i++) {
-		if (!(*((*Motors_state_vector)[i]) == Motors_state_etalon[i])){
+	for (int i = 1; i<13; i++) {
+		if (!(command_for_robot[i] == command_for_robot_etalon[i])){
 			is_similar_flag = false;
+			break;
 		}
 	}
 
 	if (!is_similar_flag) {
 		// Делаем отправку сообщений
-		sendMWSSMessage(createMessage());
+		sendMessage(createMessage());
 		//Записываем Эталон
-		for (int i = 0; i<12; i++) {
-			Motors_state_etalon[i] = *((*Motors_state_vector)[i]);
+		for (int i = 1; i<13; i++) {
+			command_for_robot_etalon[i] = command_for_robot[i];
 		}
 	}
 };
@@ -463,7 +397,13 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			variable_value *input3 = (variable_value *)args[2];
 			variable_value *input4 = (variable_value *)args[3];
 
-			moveChassie((int)*input1, (int)*input2, (int)*input3, (bool)*input4);
+			request *temp;
+			temp = moveChassie((int)*input1, (int)*input2, (int)*input3);
+			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, temp));
+			if ((bool)*input4){
+				th_1.join();
+			}
+			
 			break;
 		}
 		case 2: { // moveTurrel
@@ -471,7 +411,13 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			variable_value *input2 = (variable_value *)args[1];
 			variable_value *input3 = (variable_value *)args[2];
 			variable_value *input4 = (variable_value *)args[3];
-			moveTurrel(input1, (int)*input2, (int)*input3, (bool)*input4);
+
+			request *temp;
+			temp = moveTurrel(input1, (int)*input2, (int)*input3);
+			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, temp));
+			if ((bool)*input4){
+				th_1.join();
+			}
 			break;
 		}
 		case 3: { // fireWeapon
@@ -479,7 +425,13 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			variable_value *input2 = (variable_value *)args[1];
 			variable_value *input3 = (variable_value *)args[2];
 			variable_value *input4 = (variable_value *)args[3];
-			fireWeapon( input1, (int)*input2, (int)*input3, (bool)*input4);
+
+			request *temp;
+			temp = fireWeapon(input1, (int)*input2, (int)*input3);
+			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, temp));
+			if ((bool)*input4){
+				th_1.join();
+			}
 			break;
 		}
 		};
@@ -505,40 +457,30 @@ PREFIX_FUNC_DLL RobotModule* getRobotModuleObject() {
 	return new mwssRobotModule();
 };
 
-
-
-
-
 /// Функции робота
-void moveChassie(int speed_L, int speed_R, int time, bool flag){
+request* mwssRobot::moveChassie(int speed_L, int speed_R, int time){
 
 	request *left_motor, *right_motor;
 	left_motor = new request;
 	right_motor = new request;
 
-	left_motor->flag = flag;
 	left_motor->new_speed = speed_L;
 	left_motor->time = time;
 	left_motor->motor = Motors_state_vector[3];
 	left_motor->next_request = right_motor;
 
-	right_motor->flag = flag;
 	right_motor->new_speed = speed_R;
-	right_motor->time = time;
 	right_motor->motor = Motors_state_vector[4];
 	right_motor->next_request = NULL;
 
+	robot_motors_state_mtx.lock();
 	Motors_state_vector[3]->req = left_motor;
-	Motors_state_vector[4]->req = right_motor;
+	robot_motors_state_mtx.unlock();
 
-	boost::thread Sleep_Thread(SleeperThread, left_motor);
-	if (flag){ // if flag == true we wait before Sleep thread done work
-		Sleep_Thread.join();
-	}
-
+	return left_motor;
 };
 
-void moveTurrel(std::string motor, int speed, int time, bool flag){
+request* mwssRobot::moveTurrel(std::string motor, int speed, int time){
 	int num_motor;
 
 	switch (*(motor.c_str()))
@@ -562,21 +504,19 @@ void moveTurrel(std::string motor, int speed, int time, bool flag){
 	request *turrel_motor;
 	turrel_motor = new request;
 
-	turrel_motor->flag = flag;
 	turrel_motor->new_speed = speed;
 	turrel_motor->time = time;
 	turrel_motor->motor = Motors_state_vector[num_motor];
 	turrel_motor->next_request = NULL;
 
+	robot_motors_state_mtx.lock();
 	Motors_state_vector[num_motor]->req = turrel_motor;
+	robot_motors_state_mtx.unlock();
 
-	boost::thread Sleep_Thread(SleeperThread, turrel_motor);
-	if (flag){ // if flag == true we wait before Sleep thread done work
-		Sleep_Thread.join();
-	}
+	return turrel_motor;
 };
 
-void fireWeapon(std::string motor, bool enabled, int time, bool flag){
+request* mwssRobot::fireWeapon(std::string motor, bool enabled, int time){
 	int num_motor;
 
 	switch (*(motor.c_str()))
@@ -596,99 +536,136 @@ void fireWeapon(std::string motor, bool enabled, int time, bool flag){
 	request *weapon_motor;
 	weapon_motor = new request;
 
-	weapon_motor->flag = flag;
 	weapon_motor->new_speed = enabled;
 	weapon_motor->time = time;
 	weapon_motor->motor = Motors_state_vector[num_motor];
 	weapon_motor->next_request = NULL;
 
+	robot_motors_state_mtx.lock();
 	Motors_state_vector[num_motor]->req = weapon_motor;
+	robot_motors_state_mtx.unlock();
 
-	boost::thread Sleep_Thread(SleeperThread, weapon_motor);
-	if (flag){ // if flag == true we wait before Sleep thread done work
-		Sleep_Thread.join();
-	}
+	return weapon_motor;
 };
 
-unsigned char *createMessage()
+unsigned char* mwssRobot::createMessage()
 {
+	// Пробегает по Motors_state_vector и в соответствии с ним собирает сообщение
 	for (int i = 0; i < 7; i++){
 		switch (i)
 		{
 		case 0:{ // LEFT TURREL
 			int speed = Motors_state_vector[i]->now_state;
-			LeftMotorTurrelRelay = (speed >= 0) ? 0 : 1;
-			LeftMotorTurrelPWM = abs(speed);
+			command_for_robot[1] = (speed >= 0) ? 0 : 1;
+			command_for_robot[6] = abs(speed);
 			break;
 		}
 		case 1:{ // RIGHT TURREL
 			int speed = Motors_state_vector[i]->now_state;
-			RightMotorTurrelRelay = (speed >= 0) ? 0 : 1;
-			RightMotorTurrelPWM = abs(speed);
+			command_for_robot[2] = (speed >= 0) ? 0 : 1;
+			command_for_robot[7] = abs(speed);
 			break;
 		}
 		case 2:{ // DOWN TURREL
 			int speed = Motors_state_vector[i]->now_state;
-			DownMotorTurrelRelay = (speed >= 0) ? 0 : 1;
-			DownMotorTurrelPWM = abs(speed);
+			command_for_robot[3] = (speed >= 0) ? 0 : 1;
+			command_for_robot[8] = abs(speed);
 			break;
 		}
 		case 3:{ // LEFT CHASSIE
 			int speed = Motors_state_vector[i]->now_state;
-			LeftMotorChassisRelay = (speed >= 0) ? 0 : 1;
-			LeftMotorChassisPWM = abs(speed);
+			command_for_robot[4] = (speed >= 0) ? 0 : 1;
+			command_for_robot[9] = abs(speed);
 			break;
 		}
 		case 4:{ // RIGHT CHASSIE
 			int speed = Motors_state_vector[i]->now_state;
-			RightMotorChassisRelay = (speed >= 0) ? 0 : 1;
-			RightMotorChassisPWM = abs(speed);
+			command_for_robot[5] = (speed >= 0) ? 0 : 1;
+			command_for_robot[10] = abs(speed);
 			break;
 		}
 		case 5:{ // LEFT WEAPON
 			int speed = Motors_state_vector[i]->now_state;
-			LeftWeaponRelay = (speed != 0) ? 1 : 0;
+			command_for_robot[11] = (speed != 0) ? 1 : 0;
 			break;
 		}
 		case 6:{ // LEFT WEAPON
 			int speed = Motors_state_vector[i]->now_state;
-			RightWeaponRelay = (speed != 0) ? 1 : 0;
+			command_for_robot[12] = (speed != 0) ? 1 : 0;
 			break;
 		}
 		}
 	}
 
-	unsigned char a[19];
-
-	a[0] = 0x7E;
-	a[1] = LeftMotorTurrelRelay;
-	a[2] = RightMotorTurrelRelay;
-	a[3] = DownMotorTurrelRelay;
-	a[4] = LeftMotorChassisRelay;
-	a[5] = RightMotorChassisRelay;
-	a[6] = LeftMotorTurrelPWM;
-	a[7] = RightMotorTurrelPWM;
-	a[8] = DownMotorTurrelPWM;
-	a[9] = LeftMotorChassisPWM;
-	a[10] = RightMotorChassisPWM;
-	a[11] = LeftWeaponRelay;
-	a[12] = RightWeaponRelay;
-	a[13] = LeftMotorTurrelPWM_scaler;
-	a[14] = RightMotorTurrelPWM_scaler;
-	a[15] = DownMotorTurrelPWM_scaler;
-	a[16] = LeftMotorChassisPWM_scaler;
-	a[17] = RightMotorChassisPWM_scaler;
-	a[18] = 0x7F;
-
-	return a;
+	return command_for_robot;
 }
 
-void sendMWSSMessage(unsigned char *params){
-	//socket_.send(boost::asio::buffer(params,19));
+void mwssRobot::sendMessage(unsigned char *params){
+	robot_socket.send(boost::asio::buffer(params, 19));
 };
 
-void mwssRobot::sendMessage(unsigned char *params){
+void mwssRobot::prepare(colorPrintfRobot_t *colorPrintf_p, colorPrintfRobotVA_t *colorPrintfVA_p) {
+	this->colorPrintf_p = colorPrintfVA_p;
+}
 
-	robot_socket.send(boost::asio::buffer(params, 19));
+void mwssRobot::colorPrintf(ConsoleColor colors, const char *mask, ...) {
+	va_list args;
+	va_start(args, mask);
+	(*colorPrintf_p)(this, uniq_name, colors, mask, args);
+	va_end(args);
+}
 
+void mwssRobotModule::colorPrintf(ConsoleColor colors, const char *mask, ...) {
+	va_list args;
+	va_start(args, mask);
+	(*colorPrintf_p)(this, colors, mask, args);
+	va_end(args);
+}
+
+mwssRobot::mwssRobot(boost::asio::ip::tcp::endpoint robot_endpoint) :
+is_locked(false),
+is_aviable(true),
+robot_socket(robot_io_service_),
+robot_sleep_thread_function(&mwssRobot::robotSleeperThread)
+{
+	robot_motors_state_mtx.initialize();
+	uniq_name = new char[40];
+	sprintf(uniq_name, "robot-%u", 1);
+
+	for (int i = 0; i < 7; i++){ // We have 7 "motors"
+		Motors_state_vector[i] = new MotorState;
+		Motors_state_vector[i]->now_state = 0;
+		Motors_state_vector[i]->req = NULL;
+	}
+
+	/// Command for robot massive 
+	/// 0 - first byte
+	/// 1 - 3 turrel motors Relay   Left Right Down
+	/// 4 - 5 chassie Relay         L R 
+	/// 6 - 8 turrel motors power   L R D
+	/// 9 - 10 chassie motors power L R
+	/// 11 - 12 weapone relay       L R
+	/// 13 - 15 turrel scalers		L R D  
+	/// 16 - 17 chassie scalers		L R
+	/// 18 - last byte
+	for (int i = 1; i<13; i++){
+		command_for_robot[i] = 0;
+		command_for_robot_etalon[i] = 0;
+	}
+
+	command_for_robot[0] = 0x7E;
+	command_for_robot[13] = 5;
+	command_for_robot[14] = 5;
+	command_for_robot[15] = 9;
+	command_for_robot[16] = 15;
+	command_for_robot[17] = 15;
+	command_for_robot[18] = 0x7F;
+
+	command_for_robot_etalon[0] = 0x7E;
+	command_for_robot_etalon[13] = 5;
+	command_for_robot_etalon[14] = 5;
+	command_for_robot_etalon[15] = 9;
+	command_for_robot_etalon[16] = 15;
+	command_for_robot_etalon[17] = 15;
+	command_for_robot_etalon[18] = 0x7F;
 };
