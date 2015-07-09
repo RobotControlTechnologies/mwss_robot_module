@@ -76,25 +76,25 @@ void MWSSRobot::robotSleeperThread(Request *arg){
 		arg->next_request->motor->now_state = arg->next_request->new_speed;
 	}
 	arg->motor->now_state = arg->new_speed;
-	robot_motors_state_mtx.unlock();
+
 	// Отправляем сообщение мотору работать
 	sendCommandForRobotWithChangedMotorsState();
-	
+	robot_motors_state_mtx.unlock();
 	// Sleep specified time
 	boost::this_thread::sleep(boost::posix_time::milliseconds(arg->time));
-	
+
+	robot_motors_state_mtx.lock();
 	if (arg->motor->req == arg) {
-		robot_motors_state_mtx.lock();
+
 		//Меняем информацию в массиве motors_state_vector
 		arg->motor->now_state = 0;
 		if (arg->next_request != NULL){
 			arg->next_request->motor->now_state = 0;
 		}
-		robot_motors_state_mtx.unlock();
 		// Должны отправит сообщение о том что наш мотор должен остановиться
 		sendCommandForRobotWithChangedMotorsState();
 	}
-	
+	robot_motors_state_mtx.unlock();
 	if (arg->next_request != NULL){
 		delete arg->next_request;
 	}
@@ -460,7 +460,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			motors_state_vector[3]->req = left_motor;
 			robot_motors_state_mtx.unlock();
 
-			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, left_motor));
+			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, left_motor));
 			if ((bool)*input4){
 				th_1.join();
 			}
@@ -469,15 +469,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 		}
 		case 2: { // moveTurrel
 			char  input1 = *((const char *)args[0]);
-			if (!isMotor(input1)){ throw std::exception(); }
-			variable_value *input2 = (variable_value *)args[1];
-			if (!isSpeed(*input2)){ throw std::exception(); }
-			variable_value *input3 = (variable_value *)args[2];
-			if (!isTime(*input3)) { throw std::exception(); }
-			variable_value *input4 = (variable_value *)args[3];
-
 			int num_motor;
-
 			switch (input1)
 			{
 			case 'L':{
@@ -493,8 +485,13 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 				break;
 			}
 			default:
-				break;
+				throw std::exception();
 			}
+			variable_value *input2 = (variable_value *)args[1];
+			if (!isSpeed(*input2)){ throw std::exception(); }
+			variable_value *input3 = (variable_value *)args[2];
+			if (!isTime(*input3)) { throw std::exception(); }
+			variable_value *input4 = (variable_value *)args[3];
 
 			Request *turrel_motor;
 			turrel_motor = new Request((int)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
@@ -503,7 +500,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			motors_state_vector[num_motor]->req = turrel_motor;
 			robot_motors_state_mtx.unlock();
 
-			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, turrel_motor));
+			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, turrel_motor));
 			if ((bool)*input4){
 				th_1.join();
 			}
@@ -511,15 +508,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 		}
 		case 3: { // fireWeapon
 			char  input1 = *((const char *)args[0]);
-			if (!isMotor(input1)){ throw std::exception(); }
-			variable_value *input2 = (variable_value *)args[1];
-			if (!isSpeed(*input2)){ throw std::exception(); }
-			variable_value *input3 = (variable_value *)args[2];
-			if (!isTime(*input3)) { throw std::exception(); }
-			variable_value *input4 = (variable_value *)args[3];
-
 			int num_motor;
-
 			switch (input1)
 			{
 			case 'L':{
@@ -531,8 +520,13 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 				break;
 			}
 			default:
-				break;
+				throw std::exception();
 			}
+			variable_value *input2 = (variable_value *)args[1];
+			if (!isSpeed(*input2)){ throw std::exception(); }
+			variable_value *input3 = (variable_value *)args[2];
+			if (!isTime(*input3)) { throw std::exception(); }
+			variable_value *input4 = (variable_value *)args[3];
 
 			Request *weapon_motor;
 			weapon_motor = new Request((bool)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
@@ -541,7 +535,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			motors_state_vector[num_motor]->req = weapon_motor;
 			robot_motors_state_mtx.unlock();
 
-			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, weapon_motor));
+			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, weapon_motor));
 			if ((bool)*input4){
 				th_1.join();
 			}
@@ -649,8 +643,7 @@ MWSSRobot::MWSSRobot(boost::asio::ip::tcp::endpoint robot_endpoint) :
 is_locked(false),
 is_aviable(true),
 robot_socket(robot_io_service_),
-robot_endpoint(robot_endpoint),
-robot_sleep_thread_function(&MWSSRobot::robotSleeperThread)
+robot_endpoint(robot_endpoint)
 {
 	robot_motors_state_mtx.initialize();
 	robot_command_mtx.initialize();
