@@ -5,14 +5,12 @@
 */
 #ifdef _WIN32
 	#define _CRT_SECURE_NO_WARNINGS 
+	#define WINVER 0x0501
+	#define _WIN32_WINNT 0x0501
 #endif
 
 #include <string>
 #include <vector>
-
-#include <boost\asio.hpp>
-#include <boost\thread.hpp>
-#include <boost\thread\mutex.hpp>
 
 #ifdef _WIN32
 	#include <windows.h>
@@ -20,8 +18,12 @@
 #else
 	#include <fcntl.h>
 	#include <dlfcn.h>
-	#include <pthread.h>
+	//#include <pthread.h>
 #endif
+
+#include <boost\asio.hpp>
+#include <boost\thread.hpp>
+#include <boost\thread\mutex.hpp>
 
 #include "SimpleIni.h"
 #include "module.h"
