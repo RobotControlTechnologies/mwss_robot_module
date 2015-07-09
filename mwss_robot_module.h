@@ -16,18 +16,19 @@ struct request
 	int time;	    // ¬рем€ сколько будет спать поток
 	MotorState *motor; // ”казатель на request *req в структуре MOtorState.. Ќет, это указательна структуру Motor state.
 	request *next_request;
+
+	request(int new_speed, int time, MotorState *motor, request *next_request):
+		new_speed(new_speed), time(time), motor(motor), next_request(next_request) {};
+	request() :new_speed(0), time(0), motor(NULL), next_request(NULL){};
 };
 
 struct	MotorState {
 	int now_state; // —корость  speed
 	request *req;  // указатель на структуру запроса, изначально NULL
+	MotorState():now_state(0),req(NULL) {};
 };
 
 class mwssRobot : public Robot {
-	request* moveChassie(int speed_L, int speed_R, int time);
-	request* moveTurrel(std::string motor, int speed, int time);
-	request* fireWeapon(std::string motor, bool enabled, int time);
-
 	unsigned char *createMessage();
 	void sendMessage(unsigned char *params);
 
@@ -48,8 +49,8 @@ class mwssRobot : public Robot {
 
 	std::vector<MotorState *> Motors_state_vector;
 
+	std::vector<variable_value> axis_state; // ѕозиции осей запоминаем
 	unsigned char command_for_robot[19]; // массив текущих значений
-	unsigned char command_for_robot_etalon[19]; // массив ранее отправленных значений
 
 public:
 
@@ -74,9 +75,6 @@ class mwssRobotModule : public RobotModule{
 	FunctionData **mwssrobot_functions;
 	AxisData **robot_axis;
 	colorPrintfModule_t *colorPrintf_p;
-
-	int port;
-	std::string IP;
 
 public:
 	mwssRobotModule();
