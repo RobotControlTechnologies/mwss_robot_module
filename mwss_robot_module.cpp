@@ -1,5 +1,5 @@
 ﻿/*
-* File: mwssrobot_module.cpp
+* File: MWSSrobot_module.cpp
 * Author: m79lol, iskinmike
 *
 */
@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include <boost\chrono.hpp>
 #include <boost\asio.hpp>
 #include <boost\thread.hpp>
 #include <boost\thread\mutex.hpp>
@@ -27,42 +26,75 @@
 #include "SimpleIni.h"
 #include "module.h"
 #include "robot_module.h"
-#include "mwss_robot_module.h"
+#include "MWSS_robot_module.h"
 
 #ifdef _WIN32
 	EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 ///////// Global Variables
-const unsigned int COUNT_mwssRobot_FUNCTIONS = 3;
+const unsigned int COUNT_MWSSROBOT_FUNCTIONS = 3;
 const unsigned int COUNT_AXIS = 8;
-boost::system::error_code ec;
-int port;
-std::string IP;
+
+bool isSpeed(int speed){
+	if (abs(speed) > 255){
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
+
+bool isTime(int time){
+	if (time < 0){
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
+
+bool isMotor(char motor){
+	switch (motor){
+	case 'L':
+	case 'R':
+	case 'D':{
+		return true;
+	}
+	default:{
+		return false;
+	}
+	}
+};
 
 //// Threads
-void mwssRobot::robotSleeperThread(request *arg){
+void MWSSRobot::robotSleeperThread(Request *arg){
 	robot_motors_state_mtx.lock();
 	if (arg->next_request != NULL){
 		arg->next_request->motor->now_state = arg->next_request->new_speed;
 	}
 	arg->motor->now_state = arg->new_speed;
-	// Отправляем сообщение мотору работать
-	sendMessage(createMessage());
 	robot_motors_state_mtx.unlock();
+	// Отправляем сообщение мотору работать
+	sendCommandForRobotWithChangedMotorsState();
+	
 	// Sleep specified time
-	boost::this_thread::sleep_for(boost::chrono::milliseconds(arg->time));
-	robot_motors_state_mtx.lock();
+	boost::this_thread::sleep(boost::posix_time::milliseconds(arg->time));
+	
 	if (arg->motor->req == arg) {
-		//Меняем информацию в массиве Motors_state_vector
+		robot_motors_state_mtx.lock();
+		//Меняем информацию в массиве motors_state_vector
 		arg->motor->now_state = 0;
 		if (arg->next_request != NULL){
 			arg->next_request->motor->now_state = 0;
 		}
+		robot_motors_state_mtx.unlock();
 		// Должны отправит сообщение о том что наш мотор должен остановиться
-		sendMessage(createMessage());
+		sendCommandForRobotWithChangedMotorsState();
 	}
-	robot_motors_state_mtx.unlock();
+	
 	if (arg->next_request != NULL){
 		delete arg->next_request;
 	}
@@ -88,8 +120,8 @@ ADD_ROBOT_AXIS("RotateRightWeapone", 100, -100)\
 ADD_ROBOT_AXIS("FireLeftWeapone", 1, 0)\
 ADD_ROBOT_AXIS("FireRightWeapone", 1, 0);
 
-mwssRobotModule::mwssRobotModule() {
-	mwssrobot_functions = new FunctionData*[COUNT_mwssRobot_FUNCTIONS];
+MWSSRobotModule::MWSSRobotModule() {
+	mwssrobot_functions = new FunctionData*[COUNT_MWSSROBOT_FUNCTIONS];
 	system_value function_id = 0;
 
 	FunctionData::ParamTypes *Params = new FunctionData::ParamTypes[4];
@@ -123,21 +155,21 @@ mwssRobotModule::mwssRobotModule() {
 	DEFINE_ALL_AXIS
 };
 
-void mwssRobotModule::prepare(colorPrintfModule_t *colorPrintf_p, colorPrintfModuleVA_t *colorPrintfVA_p) {
+void MWSSRobotModule::prepare(colorPrintfModule_t *colorPrintf_p, colorPrintfModuleVA_t *colorPrintfVA_p) {
 	this->colorPrintf_p = colorPrintf_p;
 }
 
-const char* mwssRobotModule::getUID() {
-	return "mwssRobot_functions_dll";
+const char* MWSSRobotModule::getUID() {
+	return "mwssrobot_functions_dll";
 };
 
-FunctionData** mwssRobotModule::getFunctions(unsigned int *count_functions) {
-	*count_functions = COUNT_mwssRobot_FUNCTIONS;
+FunctionData** MWSSRobotModule::getFunctions(unsigned int *count_functions) {
+	*count_functions = COUNT_MWSSROBOT_FUNCTIONS;
 	return mwssrobot_functions;
 }
 
-int mwssRobotModule::init(){
-	mwssRM_mtx.initialize();
+int MWSSRobotModule::init(){
+	mwssrm_mtx.initialize();
 
 	CSimpleIniA ini;
 #ifdef _WIN32
@@ -173,6 +205,8 @@ int mwssRobotModule::init(){
 		return 1;
 	}
 
+	int port;
+	std::string IP;
 	port = ini.GetLongValue("connection", "port", 0);
 	if (!port) {
 		colorPrintf(ConsoleColor(ConsoleColor::red), "Port is empty\n");
@@ -185,30 +219,30 @@ int mwssRobotModule::init(){
 	}
 
 	boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(IP.c_str()), port);
-	mwssRobot *mwss_robot = new mwssRobot(endpoint);
-	aviable_connections.push_back(mwss_robot);
+	MWSSRobot *MWSS_robot = new MWSSRobot(endpoint);
+	aviable_connections.push_back(MWSS_robot);
 
 	return 0;
 };
 
-Robot* mwssRobotModule::robotRequire(){
-	mwssRM_mtx.lock();
+Robot* MWSSRobotModule::robotRequire(){
+	mwssrm_mtx.lock();
 	for (auto i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
 		if ((*i)->require()) {
-			mwssRM_mtx.unlock();
+			mwssrm_mtx.unlock();
 			return (*i);
 		}
 	}
-	mwssRM_mtx.unlock();
+	mwssrm_mtx.unlock();
 	return NULL;
 };
 
-bool mwssRobot::require(){
+bool MWSSRobot::require(){
 	if (!is_aviable) {
 		return false;
 	}
 	// socket connect
-	
+	boost::system::error_code ec;
 	robot_socket.connect(robot_endpoint, ec);
 	if (!robot_socket.is_open()){
 		return false;
@@ -218,20 +252,20 @@ bool mwssRobot::require(){
 	return true;
 };
 
-void mwssRobotModule::robotFree(Robot *robot){
-	mwssRobot *mwss_robot = reinterpret_cast<mwssRobot*>(robot);
-	mwssRM_mtx.lock();
+void MWSSRobotModule::robotFree(Robot *robot){
+	MWSSRobot *MWSS_robot = reinterpret_cast<MWSSRobot*>(robot);
+	mwssrm_mtx.lock();
 	for (auto i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
-		if ((*i) == mwss_robot) {
-			mwss_robot->free();
-			mwssRM_mtx.unlock();
+		if ((*i) == MWSS_robot) {
+			MWSS_robot->free();
+			mwssrm_mtx.unlock();
 			return;
 		}
 	}
-	mwssRM_mtx.unlock();
+	mwssrm_mtx.unlock();
 };
 
-void mwssRobot::free(){
+void MWSSRobot::free(){
 	if (is_aviable) {
 		return;
 	}
@@ -239,18 +273,18 @@ void mwssRobot::free(){
 	robot_socket.close();
 };
 
-void mwssRobotModule::final(){
-	mwssRM_mtx.lock();
+void MWSSRobotModule::final(){
+	mwssrm_mtx.lock();
 	for (auto i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
 		delete (*i);
 	}
 	aviable_connections.clear();
-	mwssRM_mtx.unlock();
-	mwssRM_mtx.destroy();
+	mwssrm_mtx.unlock();
+	mwssrm_mtx.destroy();
 };
 
-void mwssRobotModule::destroy() {
-	for (unsigned int j = 0; j < COUNT_mwssRobot_FUNCTIONS; ++j) {
+void MWSSRobotModule::destroy() {
+	for (unsigned int j = 0; j < COUNT_MWSSROBOT_FUNCTIONS; ++j) {
 		if (mwssrobot_functions[j]->count_params) {
 			delete[] mwssrobot_functions[j]->params;
 		}
@@ -264,12 +298,12 @@ void mwssRobotModule::destroy() {
 	delete this;
 };
 
-AxisData **mwssRobotModule::getAxis(unsigned int *count_axis){
+AxisData **MWSSRobotModule::getAxis(unsigned int *count_axis){
 	(*count_axis) = COUNT_AXIS;
 	return robot_axis;
 };
 
-void mwssRobot::axisControl(system_value axis_index, variable_value value){
+void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 	bool need_send = false;
 
 	if (axis_index == 1) {
@@ -287,104 +321,91 @@ void mwssRobot::axisControl(system_value axis_index, variable_value value){
 
 	if (need_send) {
 		axis_state[axis_index - 1] = value;
+		robot_command_mtx.lock();
 		switch (axis_index)
 		{
 		case 2:{ // MoveChassie
-			if (!is_locked){
-				if (value >= 0) {
-					command_for_robot[4] = 0;
-					command_for_robot[5] = 0;
-				}
-				else {
-					command_for_robot[4] = 1;
-					command_for_robot[5] = 1;
-				}
-				command_for_robot[9] = (int)abs(value);
-				command_for_robot[10] = (int)abs(value);
+			if (value >= 0) {
+				command_for_robot[4] = 0;
+				command_for_robot[5] = 0;
 			}
+			else {
+				command_for_robot[4] = 1;
+				command_for_robot[5] = 1;
+			}
+			command_for_robot[9] = (int)abs(value);
+			command_for_robot[10] = (int)abs(value);
 			break;
 		}
 		case 3:{ // RotateChassie
-			if (!is_locked){
-				if (value > 0) {
-					command_for_robot[4] = 1;
-					command_for_robot[5] = 0;
-				}
-				else if (value = 0){
-					command_for_robot[4] = 0;
-					command_for_robot[5] = 0;
-				}
-				else {
-					command_for_robot[4] = 0;
-					command_for_robot[5] = 1;
-				}
-				command_for_robot[9] = (int)abs(value);
-				command_for_robot[10] = (int)abs(value);
+			if (value > 0) {
+				command_for_robot[4] = 1;
+				command_for_robot[5] = 0;
 			}
+			else if (value = 0){
+				command_for_robot[4] = 0;
+				command_for_robot[5] = 0;
+			}
+			else {
+				command_for_robot[4] = 0;
+				command_for_robot[5] = 1;
+			}
+			command_for_robot[9] = (int)abs(value);
+			command_for_robot[10] = (int)abs(value);
 			break;
 		}
 		case 4:{ // RotateTurrel
-			if (!is_locked){
-				if (value >= 0) {
-					command_for_robot[3] = 0;
-				}
-				else {
-					command_for_robot[3] = 1;
-				}
-				command_for_robot[3] = (int)abs(value);
+			if (value >= 0) {
+				command_for_robot[3] = 0;
 			}
+			else {
+				command_for_robot[3] = 1;
+			}
+			command_for_robot[3] = (int)abs(value);
 			break;
 		}
 		case 5:{ // RotateLeftWeapone
-			if (!is_locked){
-				if (value >= 0) {
-					command_for_robot[1] = 0;
-				}
-				else {
-					command_for_robot[1] = 1;
-				}
-				command_for_robot[1] = (int)abs(value);
+			if (value >= 0) {
+				command_for_robot[1] = 0;
 			}
+			else {
+				command_for_robot[1] = 1;
+			}
+			command_for_robot[1] = (int)abs(value);
 			break;
 		}
 		case 6:{ // RotateRightWeapone
-			if (!is_locked){
-				if (value >= 0) {
-					command_for_robot[2] = 0;
-				}
-				else {
-					command_for_robot[2] = 1;
-				}
-				command_for_robot[2] = (int)abs(value);
+			if (value >= 0) {
+				command_for_robot[2] = 0;
 			}
+			else {
+				command_for_robot[2] = 1;
+			}
+			command_for_robot[2] = (int)abs(value);
 			break;
 		}
 		case 7:{ // FireLeftWeapone
-			if (!is_locked){
-				command_for_robot[11] = (value) ? 1 : 0;
-			}
+			command_for_robot[11] = (value) ? 1 : 0;
 			break;
 		}
 		case 8:{ // FireRightWeapone
-			if (!is_locked){
-				command_for_robot[12] = (value) ? 1 : 0;
-			}
+			command_for_robot[12] = (value) ? 1 : 0;
 			break;
 		}
 		default:
 			break;
-		}
-
-		sendMessage(createMessage());
+		}	
+		sendCommandForRobot();
+		robot_command_mtx.unlock();
 	}
 };
 
-void *mwssRobotModule::writePC(unsigned int *buffer_length) {
+void *MWSSRobotModule::writePC(unsigned int *buffer_length) {
 	*buffer_length = 0;
 	return NULL;
 }
 
-FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args) {
+FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args) {
 	if (!functionId) {
 		return NULL;
 	}
@@ -393,35 +414,50 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 		switch (functionId) {
 		case ROBOT_COMMAND_HAND_CONTROL_BEGIN: {
 			robot_motors_state_mtx.lock();
+			for (int i = 0; i < 7; i++){ // We have 7 "motors"
+				motors_state_vector[i]->now_state=0;
+				motors_state_vector[i]->req = NULL;
+			}
+			robot_motors_state_mtx.unlock();
+			robot_command_mtx.lock();
 			for (int i = 1; i<13; i++){
 				command_for_robot[i] = 0;
 			}
-			sendMessage(createMessage());
-			robot_motors_state_mtx.unlock();
+			sendCommandForRobot();
+			robot_command_mtx.unlock();
 			break;
 		}
 		case ROBOT_COMMAND_HAND_CONTROL_END: {
 			robot_motors_state_mtx.lock();
+			for (int i = 0; i < 7; i++){ // We have 7 "motors"
+				motors_state_vector[i]->now_state = 0;
+				motors_state_vector[i]->req = NULL;
+			}
+			robot_motors_state_mtx.unlock();
+			robot_command_mtx.lock();
 			for (int i = 1; i<13; i++){
 				command_for_robot[i] = 0;
 			}
-			sendMessage(createMessage());
-			robot_motors_state_mtx.unlock();
+			sendCommandForRobot();
+			robot_command_mtx.unlock();
 			break;
 		}
 		case 1: { // moveChassie
 			variable_value *input1 = (variable_value *)args[0];
+			if (!isSpeed(*input1)){ throw std::exception(); }
 			variable_value *input2 = (variable_value *)args[1];
+			if (!isSpeed(*input2)){ throw std::exception(); }
 			variable_value *input3 = (variable_value *)args[2];
+			if (!isTime(*input3)) { throw std::exception(); }
 			variable_value *input4 = (variable_value *)args[3];
 
-			request *left_motor, *right_motor;
-			right_motor = new request((int)*input2, 0, Motors_state_vector[4], NULL);
-			left_motor = new request((int)*input1, (int)*input3, Motors_state_vector[3], right_motor);
+			Request *left_motor, *right_motor;
+			right_motor = new Request((int)*input2, 0, motors_state_vector[4], NULL);
+			left_motor = new Request((int)*input1, (int)*input3, motors_state_vector[3], right_motor);
 			
 
 			robot_motors_state_mtx.lock();
-			Motors_state_vector[3]->req = left_motor;
+			motors_state_vector[3]->req = left_motor;
 			robot_motors_state_mtx.unlock();
 
 			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, left_motor));
@@ -432,14 +468,17 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			break;
 		}
 		case 2: { // moveTurrel
-			std::string input1((const char *)args[0]);
+			char  input1 = *((const char *)args[0]);
+			if (!isMotor(input1)){ throw std::exception(); }
 			variable_value *input2 = (variable_value *)args[1];
+			if (!isSpeed(*input2)){ throw std::exception(); }
 			variable_value *input3 = (variable_value *)args[2];
+			if (!isTime(*input3)) { throw std::exception(); }
 			variable_value *input4 = (variable_value *)args[3];
 
 			int num_motor;
 
-			switch (*(input1.c_str()))
+			switch (input1)
 			{
 			case 'L':{
 				num_motor = 0;
@@ -457,11 +496,11 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 				break;
 			}
 
-			request *turrel_motor;
-			turrel_motor = new request((int)*input2, (int)*input3, Motors_state_vector[num_motor], NULL);
+			Request *turrel_motor;
+			turrel_motor = new Request((int)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
 
 			robot_motors_state_mtx.lock();
-			Motors_state_vector[num_motor]->req = turrel_motor;
+			motors_state_vector[num_motor]->req = turrel_motor;
 			robot_motors_state_mtx.unlock();
 
 			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, turrel_motor));
@@ -471,14 +510,17 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			break;
 		}
 		case 3: { // fireWeapon
-			std::string input1((const char *)args[0]);
+			char  input1 = *((const char *)args[0]);
+			if (!isMotor(input1)){ throw std::exception(); }
 			variable_value *input2 = (variable_value *)args[1];
+			if (!isSpeed(*input2)){ throw std::exception(); }
 			variable_value *input3 = (variable_value *)args[2];
+			if (!isTime(*input3)) { throw std::exception(); }
 			variable_value *input4 = (variable_value *)args[3];
 
 			int num_motor;
 
-			switch (*(input1.c_str()))
+			switch (input1)
 			{
 			case 'L':{
 				num_motor = 5;
@@ -492,11 +534,11 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 				break;
 			}
 
-			request *weapon_motor;
-			weapon_motor = new request((bool)*input2, (int)*input3, Motors_state_vector[num_motor], NULL);
+			Request *weapon_motor;
+			weapon_motor = new Request((bool)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
 
 			robot_motors_state_mtx.lock();
-			Motors_state_vector[num_motor]->req = weapon_motor;
+			motors_state_vector[num_motor]->req = weapon_motor;
 			robot_motors_state_mtx.unlock();
 
 			boost::thread th_1(boost::bind(robot_sleep_thread_function, this, weapon_motor));
@@ -513,102 +555,105 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 	};
 };
 
-int mwssRobotModule::startProgram(int uniq_index) {
+int MWSSRobotModule::startProgram(int uniq_index) {
 	return 0;
 }
 
-void mwssRobotModule::readPC(void *buffer, unsigned int buffer_length) {
+void MWSSRobotModule::readPC(void *buffer, unsigned int buffer_length) {
 }
 
-int mwssRobotModule::endProgram(int uniq_index) {
+int MWSSRobotModule::endProgram(int uniq_index) {
 	return 0;
 }
 
 PREFIX_FUNC_DLL RobotModule* getRobotModuleObject() {
-	return new mwssRobotModule();
+	return new MWSSRobotModule();
 };
 
-unsigned char* mwssRobot::createMessage()
+void MWSSRobot::sendCommandForRobotWithChangedMotorsState()
 {
-	// Пробегает по Motors_state_vector и в соответствии с ним собирает сообщение
+	// Пробегает по motors_state_vector и в соответствии с ним собирает сообщение
+	robot_command_mtx.lock();
 	for (int i = 0; i < 7; i++){
 		switch (i)
 		{
 		case 0:{ // LEFT TURREL
-			int speed = Motors_state_vector[i]->now_state;
+			int speed = motors_state_vector[i]->now_state;
 			command_for_robot[1] = (speed >= 0) ? 0 : 1;
 			command_for_robot[6] = abs(speed);
 			break;
 		}
 		case 1:{ // RIGHT TURREL
-			int speed = Motors_state_vector[i]->now_state;
+			int speed = motors_state_vector[i]->now_state;
 			command_for_robot[2] = (speed >= 0) ? 0 : 1;
 			command_for_robot[7] = abs(speed);
 			break;
 		}
 		case 2:{ // DOWN TURREL
-			int speed = Motors_state_vector[i]->now_state;
+			int speed = motors_state_vector[i]->now_state;
 			command_for_robot[3] = (speed >= 0) ? 0 : 1;
 			command_for_robot[8] = abs(speed);
 			break;
 		}
 		case 3:{ // LEFT CHASSIE
-			int speed = Motors_state_vector[i]->now_state;
+			int speed = motors_state_vector[i]->now_state;
 			command_for_robot[4] = (speed >= 0) ? 0 : 1;
 			command_for_robot[9] = abs(speed);
 			break;
 		}
 		case 4:{ // RIGHT CHASSIE
-			int speed = Motors_state_vector[i]->now_state;
+			int speed = motors_state_vector[i]->now_state;
 			command_for_robot[5] = (speed >= 0) ? 0 : 1;
 			command_for_robot[10] = abs(speed);
 			break;
 		}
 		case 5:{ // LEFT WEAPON
-			int speed = Motors_state_vector[i]->now_state;
+			int speed = motors_state_vector[i]->now_state;
 			command_for_robot[11] = (speed != 0) ? 1 : 0;
 			break;
 		}
 		case 6:{ // LEFT WEAPON
-			int speed = Motors_state_vector[i]->now_state;
+			int speed = motors_state_vector[i]->now_state;
 			command_for_robot[12] = (speed != 0) ? 1 : 0;
 			break;
 		}
 		}
 	}
-
-	return command_for_robot;
+	sendCommandForRobot();
+	robot_command_mtx.unlock();
 }
 
-void mwssRobot::sendMessage(unsigned char *params){
-	robot_socket.send(boost::asio::buffer(params, 19));
+void MWSSRobot::sendCommandForRobot(){
+	robot_socket.send(boost::asio::buffer(command_for_robot, 19));
 };
 
-void mwssRobot::prepare(colorPrintfRobot_t *colorPrintf_p, colorPrintfRobotVA_t *colorPrintfVA_p) {
+void MWSSRobot::prepare(colorPrintfRobot_t *colorPrintf_p, colorPrintfRobotVA_t *colorPrintfVA_p) {
 	this->colorPrintf_p = colorPrintfVA_p;
 }
 
-void mwssRobot::colorPrintf(ConsoleColor colors, const char *mask, ...) {
+void MWSSRobot::colorPrintf(ConsoleColor colors, const char *mask, ...) {
 	va_list args;
 	va_start(args, mask);
 	(*colorPrintf_p)(this, uniq_name, colors, mask, args);
 	va_end(args);
 }
 
-void mwssRobotModule::colorPrintf(ConsoleColor colors, const char *mask, ...) {
+void MWSSRobotModule::colorPrintf(ConsoleColor colors, const char *mask, ...) {
 	va_list args;
 	va_start(args, mask);
 	(*colorPrintf_p)(this, colors, mask, args);
 	va_end(args);
 }
 // Constructor
-mwssRobot::mwssRobot(boost::asio::ip::tcp::endpoint robot_endpoint) :
+MWSSRobot::MWSSRobot(boost::asio::ip::tcp::endpoint robot_endpoint) :
 is_locked(false),
 is_aviable(true),
 robot_socket(robot_io_service_),
-robot_sleep_thread_function(&mwssRobot::robotSleeperThread)
+robot_endpoint(robot_endpoint),
+robot_sleep_thread_function(&MWSSRobot::robotSleeperThread)
 {
 	robot_motors_state_mtx.initialize();
+	robot_command_mtx.initialize();
 	uniq_name = new char[40];
 	sprintf(uniq_name, "robot-%u", 1);
 	// Задает начальные позиции осей
@@ -617,7 +662,7 @@ robot_sleep_thread_function(&mwssRobot::robotSleeperThread)
 	}
 
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
-		Motors_state_vector[i] = new MotorState();
+		motors_state_vector[i] = new MotorState();
 	}
 
 	/// Command for robot massive 
@@ -641,3 +686,11 @@ robot_sleep_thread_function(&mwssRobot::robotSleeperThread)
 	command_for_robot[17] = 15;
 	command_for_robot[18] = 0x7F;
 };
+MWSSRobot::~MWSSRobot() { 
+	robot_motors_state_mtx.destroy(); 
+	robot_command_mtx.destroy();
+	delete uniq_name; 
+	for (int i = 0; i < 7; i++){ // We have 7 "motors"
+		delete motors_state_vector[i] ;
+	}
+}
