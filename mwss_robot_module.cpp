@@ -416,17 +416,9 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			variable_value *input4 = (variable_value *)args[3];
 
 			request *left_motor, *right_motor;
-			left_motor = new request;
-			right_motor = new request;
-
-			left_motor->new_speed = (int)*input1;
-			left_motor->time = (int)*input3;
-			left_motor->motor = Motors_state_vector[3];
-			left_motor->next_request = right_motor;
-
-			right_motor->new_speed = (int)*input2;
-			right_motor->motor = Motors_state_vector[4];
-			right_motor->next_request = NULL;
+			right_motor = new request((int)*input2, 0, Motors_state_vector[4], NULL);
+			left_motor = new request((int)*input1, (int)*input3, Motors_state_vector[3], right_motor);
+			
 
 			robot_motors_state_mtx.lock();
 			Motors_state_vector[3]->req = left_motor;
@@ -466,12 +458,7 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			}
 
 			request *turrel_motor;
-			turrel_motor = new request;
-
-			turrel_motor->new_speed = (int)*input2;
-			turrel_motor->time = (int)*input3;
-			turrel_motor->motor = Motors_state_vector[num_motor];
-			turrel_motor->next_request = NULL;
+			turrel_motor = new request((int)*input2, (int)*input3, Motors_state_vector[num_motor], NULL);
 
 			robot_motors_state_mtx.lock();
 			Motors_state_vector[num_motor]->req = turrel_motor;
@@ -506,12 +493,7 @@ FunctionResult* mwssRobot::executeFunction(system_value functionId, void **args)
 			}
 
 			request *weapon_motor;
-			weapon_motor = new request;
-
-			weapon_motor->new_speed = (bool)*input2;
-			weapon_motor->time = (int)*input3;
-			weapon_motor->motor = Motors_state_vector[num_motor];
-			weapon_motor->next_request = NULL;
+			weapon_motor = new request((bool)*input2, (int)*input3, Motors_state_vector[num_motor], NULL);
 
 			robot_motors_state_mtx.lock();
 			Motors_state_vector[num_motor]->req = weapon_motor;
@@ -635,9 +617,7 @@ robot_sleep_thread_function(&mwssRobot::robotSleeperThread)
 	}
 
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
-		Motors_state_vector[i] = new MotorState;
-		Motors_state_vector[i]->now_state = 0;
-		Motors_state_vector[i]->req = NULL;
+		Motors_state_vector[i] = new MotorState();
 	}
 
 	/// Command for robot massive 
@@ -653,7 +633,6 @@ robot_sleep_thread_function(&mwssRobot::robotSleeperThread)
 	for (int i = 1; i<13; i++){
 		command_for_robot[i] = 0;
 	}
-
 	command_for_robot[0] = 0x7E;
 	command_for_robot[13] = 5;
 	command_for_robot[14] = 5;

@@ -16,11 +16,16 @@ struct request
 	int time;	    // Время сколько будет спать поток
 	MotorState *motor; // Указатель на request *req в структуре MOtorState.. Нет, это указательна структуру Motor state.
 	request *next_request;
+
+	request(int new_speed, int time, MotorState *motor, request *next_request):
+		new_speed(new_speed), time(time), motor(motor), next_request(next_request) {};
+	request() :new_speed(0), time(0), motor(NULL), next_request(NULL){};
 };
 
 struct	MotorState {
 	int now_state; // Скорость  speed
 	request *req;  // указатель на структуру запроса, изначально NULL
+	MotorState():now_state(0),req(NULL) {};
 };
 
 class mwssRobot : public Robot {
