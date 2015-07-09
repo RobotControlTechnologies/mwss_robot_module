@@ -3,36 +3,36 @@
 * Author: m79lol, iskinmike
 *
 */
-#ifndef VIRTUAL_ROBOT_MODULE_H
-#define	VIRTUAL_ROBOT_MODULE_H
+#ifndef MWSS_ROBOT_MODULE_H
+#define	MWSS_ROBOT_MODULE_H
 
 //////////// Service FUNCTIONS and STRUCTURES
 struct MotorState;
-struct request;
+struct Request;
 
-struct request
+struct Request
 {
 	int new_speed;  // Ќова€ скорость
 	int time;	    // ¬рем€ сколько будет спать поток
-	MotorState *motor; // ”казатель на request *req в структуре MOtorState.. Ќет, это указательна структуру Motor state.
-	request *next_request;
+	MotorState *motor; // ”казатель на Request *req в структуре MOtorState.. Ќет, это указательна структуру Motor state.
+	Request *next_request;
 
-	request(int new_speed, int time, MotorState *motor, request *next_request):
+	Request(int new_speed, int time, MotorState *motor, Request *next_request):
 		new_speed(new_speed), time(time), motor(motor), next_request(next_request) {};
-	request() :new_speed(0), time(0), motor(NULL), next_request(NULL){};
+	Request() :new_speed(0), time(0), motor(NULL), next_request(NULL){};
 };
 
 struct	MotorState {
 	int now_state; // —корость  speed
-	request *req;  // указатель на структуру запроса, изначально NULL
+	Request *req;  // указатель на структуру запроса, изначально NULL
 	MotorState():now_state(0),req(NULL) {};
 };
 
-class mwssRobot : public Robot {
-	unsigned char *createMessage();
-	void sendMessage(unsigned char *params);
+class MWSSRobot : public Robot {
+	void sendCommandForRobot();
+	void sendCommandForRobotWithChangedMotorsState();
 
-	void robotSleeperThread(request *arg);
+	void robotSleeperThread(Request *arg);
 	void createSleeperThread();
 
 	char *uniq_name;
@@ -42,12 +42,13 @@ class mwssRobot : public Robot {
 	bool is_aviable;
 
 	boost::mutex robot_motors_state_mtx;
+	boost::mutex robot_command_mtx;
 	boost::asio::io_service robot_io_service_;
 	boost::asio::ip::tcp::socket robot_socket;
 	boost::asio::ip::tcp::endpoint robot_endpoint;
-	boost::function<void(mwssRobot*, request*)> robot_sleep_thread_function;
+	boost::function<void(MWSSRobot*, Request*)> robot_sleep_thread_function;
 
-	std::vector<MotorState *> Motors_state_vector;
+	std::vector<MotorState *> motors_state_vector;
 
 	std::vector<variable_value> axis_state; // ѕозиции осей запоминаем
 	unsigned char command_for_robot[19]; // массив текущих значений
@@ -58,26 +59,26 @@ public:
 	void free();
 
 	// Constructor
-	mwssRobot(boost::asio::ip::tcp::endpoint robot_endpoint);
+	MWSSRobot(boost::asio::ip::tcp::endpoint robot_endpoint);
 	void prepare(colorPrintfRobot_t *colorPrintf_p, colorPrintfRobotVA_t *colorPrintfVA_p);
 	FunctionResult* executeFunction(system_value command_index, void **args);
 	void axisControl(system_value axis_index, variable_value value);
-	~mwssRobot() { robot_motors_state_mtx.destroy(); };
+	~MWSSRobot();
 
 	void colorPrintf(ConsoleColor colors, const char *mask, ...);
 };
 
-typedef std::vector<mwssRobot*> m_connections;
+typedef std::vector<MWSSRobot*> m_connections;
 
-class mwssRobotModule : public RobotModule{
-	boost::mutex mwssRM_mtx;
+class MWSSRobotModule : public RobotModule{
+	boost::mutex mwssrm_mtx;
 	m_connections aviable_connections;
 	FunctionData **mwssrobot_functions;
 	AxisData **robot_axis;
 	colorPrintfModule_t *colorPrintf_p;
 
 public:
-	mwssRobotModule();
+	MWSSRobotModule();
 
 	//init
 	const char *getUID();
@@ -103,8 +104,8 @@ public:
 
 	//destructor
 	void destroy();
-	~mwssRobotModule(){};
+	~MWSSRobotModule(){};
 
 	void colorPrintf(ConsoleColor colors, const char *mask, ...);
 };
-#endif	/* VIRTUAL_ROBOT_MODULE_H */
+#endif	/* MWSS_ROBOT_MODULE_H */
