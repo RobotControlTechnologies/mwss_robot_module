@@ -33,7 +33,6 @@ class MWSSRobot : public Robot {
 	void sendCommandForRobotWithChangedMotorsState();
 
 	void robotSleeperThread(Request *arg);
-	void createSleeperThread();
 
 	char *uniq_name;
 	colorPrintfRobotVA_t *colorPrintf_p;
@@ -46,7 +45,6 @@ class MWSSRobot : public Robot {
 	boost::asio::io_service robot_io_service_;
 	boost::asio::ip::tcp::socket robot_socket;
 	boost::asio::ip::tcp::endpoint robot_endpoint;
-	boost::function<void(MWSSRobot*, Request*)> robot_sleep_thread_function;
 
 	std::vector<MotorState *> motors_state_vector;
 
