@@ -24,10 +24,6 @@ struct	MotorState {
 };
 
 class mwssRobot : public Robot {
-	request* moveChassie(int speed_L, int speed_R, int time);
-	request* moveTurrel(std::string motor, int speed, int time);
-	request* fireWeapon(std::string motor, bool enabled, int time);
-
 	unsigned char *createMessage();
 	void sendMessage(unsigned char *params);
 
@@ -48,8 +44,8 @@ class mwssRobot : public Robot {
 
 	std::vector<MotorState *> Motors_state_vector;
 
+	std::vector<variable_value> axis_state; // ѕозиции осей запоминаем
 	unsigned char command_for_robot[19]; // массив текущих значений
-	unsigned char command_for_robot_etalon[19]; // массив ранее отправленных значений
 
 public:
 
@@ -74,9 +70,6 @@ class mwssRobotModule : public RobotModule{
 	FunctionData **mwssrobot_functions;
 	AxisData **robot_axis;
 	colorPrintfModule_t *colorPrintf_p;
-
-	int port;
-	std::string IP;
 
 public:
 	mwssRobotModule();
