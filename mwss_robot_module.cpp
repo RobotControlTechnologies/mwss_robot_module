@@ -17,6 +17,7 @@
 #else
 	#include <fcntl.h>
 	#include <dlfcn.h>
+	#include <stdarg.h>
 #endif
 
 #include <boost/asio.hpp>
