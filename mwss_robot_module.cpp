@@ -407,8 +407,9 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 	if (!functionId) {
 		return NULL;
 	}
-	variable_value rez = 0;
+	
 	try {
+    variable_value rez = 0;
 		switch (functionId) {
 		case ROBOT_COMMAND_HAND_CONTROL_BEGIN: {
 			robot_motors_state_mtx.lock();
