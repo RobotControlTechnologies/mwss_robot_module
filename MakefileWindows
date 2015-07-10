@@ -30,15 +30,15 @@ release: clean module
 
 clean:
 	@echo "-------------------------" 
-	rm -rf ${OBJECTDIR}
+	${RM} -rf ${OBJECTDIR}
 
 mwss_robot_module.o:  mwss_robot_module.cpp
 	@echo "-------------------------" 
-	mkdir -p ${OBJECTDIR}
-	rm -f "${OBJECTDIR}/$@.d"
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} -f "${OBJECTDIR}/$@.d"
 	$(COMPILE.cc) $(FLAGS) -o  ${OBJECTDIR}/mwss_robot_module.o mwss_robot_module.cpp
 
 module: mwss_robot_module.o 
 	@echo "-------------------------" 
-	mkdir -p ${OBJECTDIR}
+	${MKDIR} -p ${OBJECTDIR}
 	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).dll -L"${BOOST_DIR}\stage\lib" ${BOOST_LIBS} -lws2_32
