@@ -113,11 +113,11 @@ axis_id++;
 
 #define DEFINE_ALL_AXIS \
 ADD_ROBOT_AXIS("locked", 1, 0)\
-ADD_ROBOT_AXIS("MoveChassie", 100, -100)\
-ADD_ROBOT_AXIS("RotateChassie", 100, -100)\
-ADD_ROBOT_AXIS("RotateTurrel", 100, -100)\
-ADD_ROBOT_AXIS("RotateLeftWeapone", 100, -100)\
-ADD_ROBOT_AXIS("RotateRightWeapone", 100, -100)\
+ADD_ROBOT_AXIS("MoveChassie", 255, -255)\
+ADD_ROBOT_AXIS("RotateChassie", 255, -255)\
+ADD_ROBOT_AXIS("RotateTurrel", 255, -255)\
+ADD_ROBOT_AXIS("RotateLeftWeapone", 255, -255)\
+ADD_ROBOT_AXIS("RotateRightWeapone", 255, -255)\
 ADD_ROBOT_AXIS("FireLeftWeapone", 1, 0)\
 ADD_ROBOT_AXIS("FireRightWeapone", 1, 0);
 
