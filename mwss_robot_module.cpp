@@ -13,22 +13,22 @@
 #include <vector>
 
 #ifdef _WIN32
-	#include <windows.h>
-	#include <stdlib.h> 
+	//#include <windows.h>
+	//#include <stdlib.h> 
 #else
 	#include <fcntl.h>
 	#include <dlfcn.h>
-	//#include <pthread.h>
+	#include <stdarg.h>
 #endif
 
-#include <boost\asio.hpp>
-#include <boost\thread.hpp>
-#include <boost\thread\mutex.hpp>
+#include <boost/asio.hpp>
+#include <boost/thread.hpp>
+//#include <boost/thread/mutex.hpp>
 
 #include "SimpleIni.h"
 #include "module.h"
 #include "robot_module.h"
-#include "MWSS_robot_module.h"
+#include "mwss_robot_module.h"
 
 #ifdef _WIN32
 	EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -171,7 +171,7 @@ FunctionData** MWSSRobotModule::getFunctions(unsigned int *count_functions) {
 }
 
 int MWSSRobotModule::init(){
-	mwssrm_mtx.initialize();
+	//mwssrm_mtx.initialize();
 
 	CSimpleIniA ini;
 #ifdef _WIN32
@@ -282,7 +282,7 @@ void MWSSRobotModule::final(){
 	}
 	aviable_connections.clear();
 	mwssrm_mtx.unlock();
-	mwssrm_mtx.destroy();
+	//mwssrm_mtx.destroy();
 };
 
 void MWSSRobotModule::destroy() {
@@ -344,13 +344,15 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 				command_for_robot[4] = 1;
 				command_for_robot[5] = 0;
 			}
-			else if (value = 0){
-				command_for_robot[4] = 0;
-				command_for_robot[5] = 0;
-			}
 			else {
-				command_for_robot[4] = 0;
-				command_for_robot[5] = 1;
+				if (value == 0){
+					command_for_robot[4] = 0;
+					command_for_robot[5] = 0;
+				}
+				else {
+					command_for_robot[4] = 0;
+					command_for_robot[5] = 1;
+				}
 			}
 			command_for_robot[9] = (int)abs(value);
 			command_for_robot[10] = (int)abs(value);
@@ -647,8 +649,8 @@ is_aviable(true),
 robot_socket(robot_io_service_),
 robot_endpoint(robot_endpoint)
 {
-	robot_motors_state_mtx.initialize();
-	robot_command_mtx.initialize();
+	//robot_motors_state_mtx.initialize();
+	//robot_command_mtx.initialize();
 	uniq_name = new char[40];
 	sprintf(uniq_name, "robot-%u", 1);
 	// Задает начальные позиции осей
@@ -682,8 +684,8 @@ robot_endpoint(robot_endpoint)
 	command_for_robot[18] = 0x7F;
 };
 MWSSRobot::~MWSSRobot() { 
-	robot_motors_state_mtx.destroy(); 
-	robot_command_mtx.destroy();
+	//robot_motors_state_mtx.destroy(); 
+	//robot_command_mtx.destroy();
 	delete uniq_name; 
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
 		delete motors_state_vector[i] ;
