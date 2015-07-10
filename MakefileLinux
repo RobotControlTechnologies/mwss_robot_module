@@ -4,9 +4,10 @@ CCC=g++
 CXX=g++
 
 # Constants
-MODULE_HEADERS_DIR = "D:\TempRepo\module_headers_06_07_2015"
-SIMPLEINI_DIR = "D:\TempRepo\simpleini"
-BOOST_DIR = "D:\Soft\boost_1_58_0"
+MODULE_HEADERS_DIR = "/home/mike/repo/module_headers_06_07_2015"
+SIMPLEINI_DIR = "/home/mike/repo/simpleini"
+BOOST_DIR = "/usr/include"
+BOOST_LIBS_DIR = "/usr/lib/i386-linux-gnu"
 
 INCLUDE_DIR_FLAGS = -I${MODULE_HEADERS_DIR} -I${SIMPLEINI_DIR} -I${BOOST_DIR}
 
@@ -37,4 +38,4 @@ mwss_robot_module.o:  mwss_robot_module.cpp
 module: mwss_robot_module.o 
 	@echo "-------------------------" 
 	mkdir -p ${OBJECTDIR}
-	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).so
+	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).so -L${BOOST_LIBS_DIR} -lboost_thread
