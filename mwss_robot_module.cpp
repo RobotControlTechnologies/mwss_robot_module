@@ -162,7 +162,7 @@ FunctionData** MWSSRobotModule::getFunctions(unsigned int *count_functions) {
 int MWSSRobotModule::init(){
     std::string ConfigPath = "";
 #ifdef _WIN32
-    std::string ConfigPath = getConfigPath();
+    ConfigPath = getConfigPath();
 #else
     Dl_info PathToSharedObject;
     void * pointer = reinterpret_cast<void*> (getRobotModuleObject);
