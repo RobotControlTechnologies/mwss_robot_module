@@ -8,6 +8,11 @@
 #include <vector>
 #include <stdarg.h>
 
+#ifndef _WIN32
+    #include <fcntl.h>
+    #include <dlfcn.h>
+#endif
+
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
 
@@ -155,9 +160,26 @@ FunctionData** MWSSRobotModule::getFunctions(unsigned int *count_functions) {
 }
 
 int MWSSRobotModule::init(){
+    std::string ConfigPath = "";
+#ifdef _WIN32
+    std::string ConfigPath = getConfigPath();
+#else
+    Dl_info PathToSharedObject;
+    void * pointer = reinterpret_cast<void*> (getRobotModuleObject);
+    dladdr(pointer, &PathToSharedObject);
+    std::string dltemp(PathToSharedObject.dli_fname);
+
+    int dlfound = dltemp.find_last_of("/");
+
+    dltemp = dltemp.substr(0, dlfound);
+    dltemp += "/config.ini";
+
+    ConfigPath.append(dltemp.c_str());
+#endif
+
     CSimpleIniA ini;
     ini.SetMultiKey(true);
-    std::string ConfigPath = getConfigPath();
+
   if (ini.LoadFile(ConfigPath.c_str()) < 0) {
 		colorPrintf(ConsoleColor(ConsoleColor::red), "Can't load '%s' file!\n", ConfigPath.c_str());
 		return 1;
