@@ -633,7 +633,7 @@ robot_endpoint(robot_endpoint)
 	}
 
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
-		motors_state_vector[i] = new MotorState();
+            motors_state_vector.push_back(new MotorState());
 	}
 
 	/// Command for robot massive
