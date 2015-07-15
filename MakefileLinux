@@ -33,7 +33,7 @@ mwss_robot_module.o:  mwss_robot_module.cpp
 	rm -f "${OBJECTDIR}/$@.d"
 	$(COMPILE.cc) $(FLAGS) -o  ${OBJECTDIR}/mwss_robot_module.o mwss_robot_module.cpp
 
-module: mwss_robot_module.o config.o
+module: mwss_robot_module.o
 	@echo "-------------------------" 
 	mkdir -p ${OBJECTDIR}
 	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).so -lboost_system -lboost_thread
