@@ -9,6 +9,7 @@ MKDIR = "C:\msys\1.0\bin\mkdir.exe"
 MODULE_HEADERS_DIR = "C:\Program Files (x86)\Jenkins\workspace\module_headers"
 SIMPLEINI_DIR = "C:\Program Files (x86)\Jenkins\workspace\RCML_build\simpleini"
 BOOST_DIR = "C:\boost_1_58_0"
+BOOST_DIR_LIBS = "C:\boost_1_58_0\stage\lib"
 
 INCLUDE_DIR_FLAGS = -I${MODULE_HEADERS_DIR} -I${SIMPLEINI_DIR} -I${BOOST_DIR}
 
@@ -32,13 +33,19 @@ clean:
 	@echo "-------------------------" 
 	${RM} -rf ${OBJECTDIR}
 
-mwss_robot_module.o:  mwss_robot_module.cpp
+config.o: config.cpp
 	@echo "-------------------------" 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} -f "${OBJECTDIR}/$@.d"
-	$(COMPILE.cc) $(FLAGS) -o  ${OBJECTDIR}/mwss_robot_module.o mwss_robot_module.cpp
-
-module: mwss_robot_module.o 
+	$(COMPILE.cc) $(FLAGS) -o  ${OBJECTDIR}/config.o config.cpp
+  
+mwss_robot_module.o: mwss_robot_module.cpp
 	@echo "-------------------------" 
 	${MKDIR} -p ${OBJECTDIR}
-	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).dll -L"${BOOST_DIR}\stage\lib" ${BOOST_LIBS} -lws2_32
+	${RM} -f "${OBJECTDIR}/$@.d"
+	$(COMPILE.cc) $(FLAGS) -D_WIN32_WINNT=0x0501 -DWINVER=0x0501 -o ${OBJECTDIR}/mwss_robot_module.o mwss_robot_module.cpp
+
+module: mwss_robot_module.o config.o
+	@echo "-------------------------" 
+	${MKDIR} -p ${OBJECTDIR}
+	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).dll -L${BOOST_DIR_LIBS} ${BOOST_LIBS} -lws2_32

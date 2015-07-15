@@ -3,35 +3,20 @@
 * Author: m79lol, iskinmike
 *
 */
-#ifdef _WIN32
-	#define _CRT_SECURE_NO_WARNINGS 
-	#define WINVER 0x0601
-	#define _WIN32_WINNT 0x0601
-#endif
 
 #include <string>
 #include <vector>
-
-#ifdef _WIN32
-	#include <windows.h> 
-#else
-	#include <fcntl.h>
-	#include <dlfcn.h>
-	#include <stdarg.h>
-#endif
+#include <stdarg.h>
 
 #include <boost/asio.hpp>
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 
 #include "SimpleIni.h"
 #include "module.h"
 #include "robot_module.h"
 #include "mwss_robot_module.h"
 
-#ifdef _WIN32
-	EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-#endif
+extern std::string getConfigPath();
 
 ///////// Global Variables
 const unsigned int COUNT_MWSSROBOT_FUNCTIONS = 3;
@@ -109,7 +94,7 @@ robot_axis[axis_id]->axis_index = axis_id + 1; \
 robot_axis[axis_id]->upper_value = UPPER_VALUE; \
 robot_axis[axis_id]->lower_value = LOWER_VALUE; \
 robot_axis[axis_id]->name = AXIS_NAME; \
-axis_id++; 
+axis_id++;
 
 #define DEFINE_ALL_AXIS \
 ADD_ROBOT_AXIS("locked", 1, 0)\
@@ -170,37 +155,11 @@ FunctionData** MWSSRobotModule::getFunctions(unsigned int *count_functions) {
 }
 
 int MWSSRobotModule::init(){
-	CSimpleIniA ini;
-#ifdef _WIN32
-	ini.SetMultiKey(true);
-
-	WCHAR DllPath[MAX_PATH] = { 0 };
-
-	GetModuleFileNameW((HINSTANCE)&__ImageBase, DllPath, (DWORD)MAX_PATH);
-
-	WCHAR *tmp = wcsrchr(DllPath, L'\\');
-	WCHAR wConfigPath[MAX_PATH] = { 0 };
-	size_t path_len = tmp - DllPath;
-	wcsncpy(wConfigPath, DllPath, path_len);
-	wcscat(wConfigPath, L"\\config.ini");
-
-	char ConfigPath[MAX_PATH] = { 0 };
-	wcstombs(ConfigPath, wConfigPath, sizeof(ConfigPath));
-#else
-	Dl_info PathToSharedObject;
-	void * pointer = reinterpret_cast<void*> (getRobotModuleObject);
-	dladdr(pointer, &PathToSharedObject);
-	std::string dltemp(PathToSharedObject.dli_fname);
-
-	int dlfound = dltemp.find_last_of("/");
-
-	dltemp = dltemp.substr(0, dlfound);
-	dltemp += "/config.ini";
-
-	const char* ConfigPath = dltemp.c_str();
-#endif
-	if (ini.LoadFile(ConfigPath) < 0) {
-		colorPrintf(ConsoleColor(ConsoleColor::red), "Can't load '%s' file!\n", ConfigPath);
+    CSimpleIniA ini;
+    ini.SetMultiKey(true);
+    std::string ConfigPath = getConfigPath();
+  if (ini.LoadFile(ConfigPath.c_str()) < 0) {
+		colorPrintf(ConsoleColor(ConsoleColor::red), "Can't load '%s' file!\n", ConfigPath.c_str());
 		return 1;
 	}
 
@@ -392,7 +351,7 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 		}
 		default:
 			break;
-		}	
+		}
 		sendCommandForRobot();
 		robot_command_mtx.unlock();
 	}
@@ -407,7 +366,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 	if (!functionId) {
 		return NULL;
 	}
-	
+
 	try {
     variable_value rez = 0;
 		switch (functionId) {
@@ -453,7 +412,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			Request *left_motor, *right_motor;
 			right_motor = new Request((int)*input2, 0, motors_state_vector[4], NULL);
 			left_motor = new Request((int)*input1, (int)*input3, motors_state_vector[3], right_motor);
-			
+
 
 			robot_motors_state_mtx.lock();
 			motors_state_vector[3]->req = left_motor;
@@ -463,7 +422,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			if ((bool)*input4){
 				th_1.join();
 			}
-			
+
 			break;
 		}
 		case 2: { // moveTurrel
@@ -655,14 +614,14 @@ robot_endpoint(robot_endpoint)
 		motors_state_vector[i] = new MotorState();
 	}
 
-	/// Command for robot massive 
+	/// Command for robot massive
 	/// 0 - first byte
 	/// 1 - 3 turrel motors Relay   Left Right Down
-	/// 4 - 5 chassie Relay         L R 
+	/// 4 - 5 chassie Relay         L R
 	/// 6 - 8 turrel motors power   L R D
 	/// 9 - 10 chassie motors power L R
 	/// 11 - 12 weapone relay       L R
-	/// 13 - 15 turrel scalers		L R D  
+	/// 13 - 15 turrel scalers		L R D
 	/// 16 - 17 chassie scalers		L R
 	/// 18 - last byte
 	for (int i = 1; i<13; i++){
@@ -676,8 +635,8 @@ robot_endpoint(robot_endpoint)
 	command_for_robot[17] = 15;
 	command_for_robot[18] = 0x7F;
 };
-MWSSRobot::~MWSSRobot() { 
-	delete uniq_name; 
+MWSSRobot::~MWSSRobot() {
+	delete uniq_name;
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
 		delete motors_state_vector[i] ;
 	}
