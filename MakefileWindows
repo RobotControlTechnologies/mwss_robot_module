@@ -48,4 +48,4 @@ mwss_robot_module.o: mwss_robot_module.cpp
 module: mwss_robot_module.o config.o
 	@echo "-------------------------" 
 	${MKDIR} -p ${OBJECTDIR}
-	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).dll -L${BOOST_DIR_LIBS} ${BOOST_LIBS} -lws2_32
+	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o ${OBJECTDIR}/config.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).dll -L${BOOST_DIR_LIBS} ${BOOST_LIBS} -lws2_32

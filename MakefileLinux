@@ -26,6 +26,12 @@ release: clean module
 clean:
 	@echo "-------------------------" 
 	rm -rf ${OBJECTDIR}
+  
+config.o: config.cpp
+	@echo "-------------------------" 
+	mkdir -p ${OBJECTDIR}
+	rm -f "${OBJECTDIR}/$@.d"
+	$(COMPILE.cc) $(FLAGS) -o  ${OBJECTDIR}/config.o config.cpp
 
 mwss_robot_module.o:  mwss_robot_module.cpp
 	@echo "-------------------------" 
@@ -33,7 +39,7 @@ mwss_robot_module.o:  mwss_robot_module.cpp
 	rm -f "${OBJECTDIR}/$@.d"
 	$(COMPILE.cc) $(FLAGS) -o  ${OBJECTDIR}/mwss_robot_module.o mwss_robot_module.cpp
 
-module: mwss_robot_module.o 
+module: mwss_robot_module.o config.o
 	@echo "-------------------------" 
 	mkdir -p ${OBJECTDIR}
-	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).so  -lboost_thread
+	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o ${OBJECTDIR}/config.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).so  -lboost_thread
