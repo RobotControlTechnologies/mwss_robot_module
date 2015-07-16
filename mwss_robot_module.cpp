@@ -163,7 +163,7 @@ MWSSRobotModule::MWSSRobotModule() {
 };
 
 void MWSSRobotModule::prepare(colorPrintfModule_t *colorPrintf_p, colorPrintfModuleVA_t *colorPrintfVA_p) {
-	this->colorPrintf_p = colorPrintf_p;
+	this->colorPrintf_p = colorPrintfVA_p;
 }
 
 const char* MWSSRobotModule::getUID() {
@@ -413,10 +413,6 @@ void *MWSSRobotModule::writePC(unsigned int *buffer_length) {
 }
 
 FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args) {
-	if (functionId<0) {
-		return NULL;
-	}
-	variable_value rez = 0;
 	try {
 		switch (functionId) {
 		case ROBOT_COMMAND_FREE:{
@@ -538,7 +534,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			break;
 		}
 		};
-		return new FunctionResult(1, rez);
+		return new FunctionResult(1);
 	}
 	catch (...){
 		return new FunctionResult(0);
