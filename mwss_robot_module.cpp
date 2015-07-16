@@ -90,24 +90,40 @@ void MWSSRobot::robotSleeperThread(Request *arg){
 		delete arg->next_request;
 	}
 	delete arg;
+
 }
 
 //// MACROS
+
+#define CREATE_THREAD_MACRO(NUM_MOTOR,MOTOR_STATE) \
+	robot_motors_state_mtx.lock(); \
+	motors_state_vector[NUM_MOTOR]->req = MOTOR_STATE; \
+	boost::thread *th_1 = new boost::thread(boost::bind(&MWSSRobot::robotSleeperThread, this, MOTOR_STATE)); \
+	if (motors_state_vector[NUM_MOTOR]->thread_pointer != NULL) { \
+		motors_state_vector[NUM_MOTOR]->thread_pointer->interrupt(); \
+		delete motors_state_vector[NUM_MOTOR]->thread_pointer; \
+		} \
+	motors_state_vector[NUM_MOTOR]->thread_pointer = th_1; \
+	robot_motors_state_mtx.unlock(); \
+	if ((bool)*input4){ \
+		th_1->join(); \
+	};
+
 #define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
 robot_axis[axis_id] = new AxisData; \
 robot_axis[axis_id]->axis_index = axis_id + 1; \
 robot_axis[axis_id]->upper_value = UPPER_VALUE; \
 robot_axis[axis_id]->lower_value = LOWER_VALUE; \
 robot_axis[axis_id]->name = AXIS_NAME; \
-axis_id++;
+axis_id++; 
 
 #define DEFINE_ALL_AXIS \
 ADD_ROBOT_AXIS("locked", 1, 0)\
-ADD_ROBOT_AXIS("MoveChassie", 100, -100)\
-ADD_ROBOT_AXIS("RotateChassie", 100, -100)\
-ADD_ROBOT_AXIS("RotateTurrel", 100, -100)\
-ADD_ROBOT_AXIS("RotateLeftWeapone", 100, -100)\
-ADD_ROBOT_AXIS("RotateRightWeapone", 100, -100)\
+ADD_ROBOT_AXIS("MoveChassie", 255, -255)\
+ADD_ROBOT_AXIS("RotateChassie", 255, -255)\
+ADD_ROBOT_AXIS("RotateTurrel", 255, -255)\
+ADD_ROBOT_AXIS("RotateLeftWeapone", 255, -255)\
+ADD_ROBOT_AXIS("RotateRightWeapone", 255, -255)\
 ADD_ROBOT_AXIS("FireLeftWeapone", 1, 0)\
 ADD_ROBOT_AXIS("FireRightWeapone", 1, 0);
 
@@ -208,6 +224,13 @@ int MWSSRobotModule::init(){
 Robot* MWSSRobotModule::robotRequire(){
 	mwssrm_mtx.lock();
 	for (auto i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
+		boost::system::error_code ec = (*i)->connect();
+		if (ec)
+		{   // An error occurred.
+			colorPrintf(ConsoleColor(ConsoleColor::red), "Can't connect to socket %i\n", ec.value());
+			mwssrm_mtx.unlock();
+			return NULL;
+		}
 		if ((*i)->require()) {
 			mwssrm_mtx.unlock();
 			return (*i);
@@ -217,18 +240,23 @@ Robot* MWSSRobotModule::robotRequire(){
 	return NULL;
 };
 
+boost::system::error_code MWSSRobot::connect(){
+	boost::system::error_code ec;
+	robot_socket.connect(robot_endpoint, ec);
+	return ec;
+}
+
 bool MWSSRobot::require(){
+	colorPrintf(ConsoleColor(ConsoleColor::green), "Robot require\n");
 	if (!is_aviable) {
 		return false;
 	}
-	// socket connect
-	boost::system::error_code ec;
-	robot_socket.connect(robot_endpoint, ec);
 	if (!robot_socket.is_open()){
 		return false;
 	}
 	// set flag busy
 	is_aviable = false;
+	
 	return true;
 };
 
@@ -385,13 +413,23 @@ void *MWSSRobotModule::writePC(unsigned int *buffer_length) {
 }
 
 FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args) {
-	if (!functionId) {
+	if (functionId<0) {
 		return NULL;
 	}
-
+	variable_value rez = 0;
 	try {
-    variable_value rez = 0;
 		switch (functionId) {
+		case ROBOT_COMMAND_FREE:{
+			for (int i = 0; i < 7; i++){ // We have 7 "motors"
+				if (motors_state_vector[i]->thread_pointer != NULL){
+					if (motors_state_vector[i]->thread_pointer->joinable()){
+						motors_state_vector[i]->thread_pointer->join();
+						delete motors_state_vector[i]->thread_pointer;
+					}
+				}
+			}
+			break;
+		}
 		case ROBOT_COMMAND_HAND_CONTROL_BEGIN: {
 			robot_motors_state_mtx.lock();
 			for (int i = 0; i < 7; i++){ // We have 7 "motors"
@@ -434,17 +472,8 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			Request *left_motor, *right_motor;
 			right_motor = new Request((int)*input2, 0, motors_state_vector[4], NULL);
 			left_motor = new Request((int)*input1, (int)*input3, motors_state_vector[3], right_motor);
-
-
-			robot_motors_state_mtx.lock();
-			motors_state_vector[3]->req = left_motor;
-			robot_motors_state_mtx.unlock();
-
-			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, left_motor));
-			if ((bool)*input4){
-				th_1.join();
-			}
-
+			
+			CREATE_THREAD_MACRO(3, left_motor);
 			break;
 		}
 		case 2: { // moveTurrel
@@ -476,14 +505,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			Request *turrel_motor;
 			turrel_motor = new Request((int)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
 
-			robot_motors_state_mtx.lock();
-			motors_state_vector[num_motor]->req = turrel_motor;
-			robot_motors_state_mtx.unlock();
-
-			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, turrel_motor));
-			if ((bool)*input4){
-				th_1.join();
-			}
+			CREATE_THREAD_MACRO(num_motor, turrel_motor);
 			break;
 		}
 		case 3: { // fireWeapon
@@ -511,14 +533,8 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			Request *weapon_motor;
 			weapon_motor = new Request((bool)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
 
-			robot_motors_state_mtx.lock();
-			motors_state_vector[num_motor]->req = weapon_motor;
-			robot_motors_state_mtx.unlock();
+			CREATE_THREAD_MACRO(num_motor, weapon_motor);
 
-			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, weapon_motor));
-			if ((bool)*input4){
-				th_1.join();
-			}
 			break;
 		}
 		};
@@ -633,17 +649,17 @@ robot_endpoint(robot_endpoint)
 	}
 
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
-            motors_state_vector.push_back(new MotorState());
+		motors_state_vector.push_back(new MotorState());
 	}
 
-	/// Command for robot massive
+	/// Command for robot massive 
 	/// 0 - first byte
 	/// 1 - 3 turrel motors Relay   Left Right Down
-	/// 4 - 5 chassie Relay         L R
+	/// 4 - 5 chassie Relay         L R 
 	/// 6 - 8 turrel motors power   L R D
 	/// 9 - 10 chassie motors power L R
 	/// 11 - 12 weapone relay       L R
-	/// 13 - 15 turrel scalers		L R D
+	/// 13 - 15 turrel scalers		L R D  
 	/// 16 - 17 chassie scalers		L R
 	/// 18 - last byte
 	for (int i = 1; i<13; i++){
@@ -657,8 +673,8 @@ robot_endpoint(robot_endpoint)
 	command_for_robot[17] = 15;
 	command_for_robot[18] = 0x7F;
 };
-MWSSRobot::~MWSSRobot() {
-	delete uniq_name;
+MWSSRobot::~MWSSRobot() { 
+	delete[] uniq_name; 
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
 		delete motors_state_vector[i] ;
 	}
