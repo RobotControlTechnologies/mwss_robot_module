@@ -76,7 +76,7 @@ class MWSSRobotModule : public RobotModule{
 	m_connections aviable_connections;
 	FunctionData **mwssrobot_functions;
 	AxisData **robot_axis;
-	colorPrintfModule_t *colorPrintf_p;
+	colorPrintfModuleVA_t *colorPrintf_p;
 
 public:
 	MWSSRobotModule();
