@@ -9,6 +9,7 @@
 	#define _WIN32_WINNT 0x0601
 #endif
 
+#include <stdarg.h>
 #include <string>
 #include <vector>
 
@@ -17,7 +18,7 @@
 #else
 	#include <fcntl.h>
 	#include <dlfcn.h>
-	#include <stdarg.h>
+	
 #endif
 
 #include <boost/asio.hpp>
@@ -100,9 +101,25 @@ void MWSSRobot::robotSleeperThread(Request *arg){
 		delete arg->next_request;
 	}
 	delete arg;
+
 }
 
 //// MACROS
+
+#define CREATE_THREAD_MACRO(NUM_MOTOR,MOTOR_STATE) \
+	robot_motors_state_mtx.lock(); \
+	motors_state_vector[NUM_MOTOR]->req = MOTOR_STATE; \
+	boost::thread *th_1 = new boost::thread(boost::bind(&MWSSRobot::robotSleeperThread, this, MOTOR_STATE)); \
+	if (motors_state_vector[NUM_MOTOR]->thread_pointer != NULL) { \
+		motors_state_vector[NUM_MOTOR]->thread_pointer->interrupt(); \
+		delete motors_state_vector[NUM_MOTOR]->thread_pointer; \
+		} \
+	motors_state_vector[NUM_MOTOR]->thread_pointer = th_1; \
+	robot_motors_state_mtx.unlock(); \
+	if ((bool)*input4){ \
+		th_1->join(); \
+	};
+
 #define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
 robot_axis[axis_id] = new AxisData; \
 robot_axis[axis_id]->axis_index = axis_id + 1; \
@@ -227,6 +244,14 @@ int MWSSRobotModule::init(){
 Robot* MWSSRobotModule::robotRequire(){
 	mwssrm_mtx.lock();
 	for (auto i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
+		boost::system::error_code ec = (*i)->connect();
+		if (ec)
+		{
+			// An error occurred.
+			colorPrintf(ConsoleColor(ConsoleColor::red), "Can't connect to socket %i\n",ec.value());
+			mwssrm_mtx.unlock();
+			return NULL;
+		}
 		if ((*i)->require()) {
 			mwssrm_mtx.unlock();
 			return (*i);
@@ -236,18 +261,21 @@ Robot* MWSSRobotModule::robotRequire(){
 	return NULL;
 };
 
+boost::system::error_code MWSSRobot::connect(){
+	boost::system::error_code ec;
+	robot_socket.connect(robot_endpoint, ec);
+	return ec;
+}
+
 bool MWSSRobot::require(){
+	colorPrintf(ConsoleColor(ConsoleColor::green), "Robot require\n");
 	if (!is_aviable) {
 		return false;
 	}
-	// socket connect
-	boost::system::error_code ec;
-	robot_socket.connect(robot_endpoint, ec);
-	if (!robot_socket.is_open()){
-		return false;
-	}
+
 	// set flag busy
 	is_aviable = false;
+	
 	return true;
 };
 
@@ -404,12 +432,23 @@ void *MWSSRobotModule::writePC(unsigned int *buffer_length) {
 }
 
 FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args) {
-	if (!functionId) {
+	if (functionId<0) {
 		return NULL;
 	}
 	variable_value rez = 0;
 	try {
 		switch (functionId) {
+		case ROBOT_COMMAND_FREE:{
+			for (int i = 0; i < 7; i++){ // We have 7 "motors"
+				if (motors_state_vector[i]->thread_pointer != NULL){
+					if (motors_state_vector[i]->thread_pointer->joinable()){
+						motors_state_vector[i]->thread_pointer->join();
+						delete motors_state_vector[i]->thread_pointer;
+					}
+				}
+			}
+			break;
+		}
 		case ROBOT_COMMAND_HAND_CONTROL_BEGIN: {
 			robot_motors_state_mtx.lock();
 			for (int i = 0; i < 7; i++){ // We have 7 "motors"
@@ -453,16 +492,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			right_motor = new Request((int)*input2, 0, motors_state_vector[4], NULL);
 			left_motor = new Request((int)*input1, (int)*input3, motors_state_vector[3], right_motor);
 			
-
-			robot_motors_state_mtx.lock();
-			motors_state_vector[3]->req = left_motor;
-			robot_motors_state_mtx.unlock();
-
-			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, left_motor));
-			if ((bool)*input4){
-				th_1.join();
-			}
-			
+			CREATE_THREAD_MACRO(3, left_motor);
 			break;
 		}
 		case 2: { // moveTurrel
@@ -494,14 +524,7 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			Request *turrel_motor;
 			turrel_motor = new Request((int)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
 
-			robot_motors_state_mtx.lock();
-			motors_state_vector[num_motor]->req = turrel_motor;
-			robot_motors_state_mtx.unlock();
-
-			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, turrel_motor));
-			if ((bool)*input4){
-				th_1.join();
-			}
+			CREATE_THREAD_MACRO(num_motor, turrel_motor);
 			break;
 		}
 		case 3: { // fireWeapon
@@ -529,14 +552,8 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			Request *weapon_motor;
 			weapon_motor = new Request((bool)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
 
-			robot_motors_state_mtx.lock();
-			motors_state_vector[num_motor]->req = weapon_motor;
-			robot_motors_state_mtx.unlock();
+			CREATE_THREAD_MACRO(num_motor, weapon_motor);
 
-			boost::thread th_1(boost::bind(&MWSSRobot::robotSleeperThread, this, weapon_motor));
-			if ((bool)*input4){
-				th_1.join();
-			}
 			break;
 		}
 		};
@@ -651,7 +668,7 @@ robot_endpoint(robot_endpoint)
 	}
 
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
-		motors_state_vector[i] = new MotorState();
+		motors_state_vector.push_back(new MotorState());
 	}
 
 	/// Command for robot massive 
@@ -676,7 +693,7 @@ robot_endpoint(robot_endpoint)
 	command_for_robot[18] = 0x7F;
 };
 MWSSRobot::~MWSSRobot() { 
-	delete uniq_name; 
+	delete[] uniq_name; 
 	for (int i = 0; i < 7; i++){ // We have 7 "motors"
 		delete motors_state_vector[i] ;
 	}

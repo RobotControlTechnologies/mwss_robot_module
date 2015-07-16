@@ -25,7 +25,8 @@ struct Request
 struct	MotorState {
 	int now_state; // —корость  speed
 	Request *req;  // указатель на структуру запроса, изначально NULL
-	MotorState():now_state(0),req(NULL) {};
+	boost::thread *thread_pointer; // ”казатель на поток св€занный с мотором
+	MotorState():now_state(0),req(NULL), thread_pointer(NULL) {};
 };
 
 class MWSSRobot : public Robot {
@@ -46,12 +47,14 @@ class MWSSRobot : public Robot {
 	boost::asio::ip::tcp::socket robot_socket;
 	boost::asio::ip::tcp::endpoint robot_endpoint;
 
+	std::vector<boost::thread *> robot_thread_vector;
 	std::vector<MotorState *> motors_state_vector;
 
 	std::vector<variable_value> axis_state; // ѕозиции осей запоминаем
 	unsigned char command_for_robot[19]; // массив текущих значений
 
 public:
+	boost::system::error_code connect();
 
 	bool require();
 	void free();
