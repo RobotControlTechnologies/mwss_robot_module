@@ -98,15 +98,11 @@ void MWSSRobot::robotSleeperThread(Request *arg){
 #define CREATE_THREAD_MACRO(NUM_MOTOR,MOTOR_STATE) \
 	robot_motors_state_mtx.lock(); \
 	motors_state_vector[NUM_MOTOR]->req = MOTOR_STATE; \
-	boost::thread *th_1 = new boost::thread(boost::bind(&MWSSRobot::robotSleeperThread, this, MOTOR_STATE)); \
-	if (motors_state_vector[NUM_MOTOR]->thread_pointer != NULL) { \
-		motors_state_vector[NUM_MOTOR]->thread_pointer->interrupt(); \
-		delete motors_state_vector[NUM_MOTOR]->thread_pointer; \
-		} \
-	motors_state_vector[NUM_MOTOR]->thread_pointer = th_1; \
+	boost::thread *command_thread = new boost::thread(boost::bind(&MWSSRobot::robotSleeperThread, this, MOTOR_STATE)); \
+	motors_state_vector[NUM_MOTOR]->thread_pointer = command_thread; \
 	robot_motors_state_mtx.unlock(); \
 	if ((bool)*input4){ \
-		th_1->join(); \
+		command_thread->join(); \
 	};
 
 #define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
@@ -418,10 +414,8 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 		case ROBOT_COMMAND_FREE:{
 			for (int i = 0; i < 7; i++){ // We have 7 "motors"
 				if (motors_state_vector[i]->thread_pointer != NULL){
-					if (motors_state_vector[i]->thread_pointer->joinable()){
-						motors_state_vector[i]->thread_pointer->join();
-						delete motors_state_vector[i]->thread_pointer;
-					}
+					motors_state_vector[i]->thread_pointer->join();
+					delete motors_state_vector[i]->thread_pointer;
 				}
 			}
 			break;
