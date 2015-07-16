@@ -3,36 +3,25 @@
 * Author: m79lol, iskinmike
 *
 */
-#ifdef _WIN32
-	#define _CRT_SECURE_NO_WARNINGS 
-	#define WINVER 0x0601
-	#define _WIN32_WINNT 0x0601
-#endif
 
-#include <stdarg.h>
 #include <string>
 #include <vector>
+#include <stdarg.h>
 
-#ifdef _WIN32
-	#include <windows.h> 
-#else
-	#include <fcntl.h>
-	#include <dlfcn.h>
-	
+#ifndef _WIN32
+    #include <fcntl.h>
+    #include <dlfcn.h>
 #endif
 
 #include <boost/asio.hpp>
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 
 #include "SimpleIni.h"
 #include "module.h"
 #include "robot_module.h"
 #include "mwss_robot_module.h"
 
-#ifdef _WIN32
-	EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-#endif
+extern std::string getConfigPath();
 
 ///////// Global Variables
 const unsigned int COUNT_MWSSROBOT_FUNCTIONS = 3;
@@ -187,37 +176,28 @@ FunctionData** MWSSRobotModule::getFunctions(unsigned int *count_functions) {
 }
 
 int MWSSRobotModule::init(){
-	CSimpleIniA ini;
+    std::string ConfigPath = "";
 #ifdef _WIN32
-	ini.SetMultiKey(true);
-
-	WCHAR DllPath[MAX_PATH] = { 0 };
-
-	GetModuleFileNameW((HINSTANCE)&__ImageBase, DllPath, (DWORD)MAX_PATH);
-
-	WCHAR *tmp = wcsrchr(DllPath, L'\\');
-	WCHAR wConfigPath[MAX_PATH] = { 0 };
-	size_t path_len = tmp - DllPath;
-	wcsncpy(wConfigPath, DllPath, path_len);
-	wcscat(wConfigPath, L"\\config.ini");
-
-	char ConfigPath[MAX_PATH] = { 0 };
-	wcstombs(ConfigPath, wConfigPath, sizeof(ConfigPath));
+    ConfigPath = getConfigPath();
 #else
-	Dl_info PathToSharedObject;
-	void * pointer = reinterpret_cast<void*> (getRobotModuleObject);
-	dladdr(pointer, &PathToSharedObject);
-	std::string dltemp(PathToSharedObject.dli_fname);
+    Dl_info PathToSharedObject;
+    void * pointer = reinterpret_cast<void*> (getRobotModuleObject);
+    dladdr(pointer, &PathToSharedObject);
+    std::string dltemp(PathToSharedObject.dli_fname);
 
-	int dlfound = dltemp.find_last_of("/");
+    int dlfound = dltemp.find_last_of("/");
 
-	dltemp = dltemp.substr(0, dlfound);
-	dltemp += "/config.ini";
+    dltemp = dltemp.substr(0, dlfound);
+    dltemp += "/config.ini";
 
-	const char* ConfigPath = dltemp.c_str();
+    ConfigPath.append(dltemp.c_str());
 #endif
-	if (ini.LoadFile(ConfigPath) < 0) {
-		colorPrintf(ConsoleColor(ConsoleColor::red), "Can't load '%s' file!\n", ConfigPath);
+
+    CSimpleIniA ini;
+    ini.SetMultiKey(true);
+
+  if (ini.LoadFile(ConfigPath.c_str()) < 0) {
+		colorPrintf(ConsoleColor(ConsoleColor::red), "Can't load '%s' file!\n", ConfigPath.c_str());
 		return 1;
 	}
 
@@ -246,9 +226,8 @@ Robot* MWSSRobotModule::robotRequire(){
 	for (auto i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
 		boost::system::error_code ec = (*i)->connect();
 		if (ec)
-		{
-			// An error occurred.
-			colorPrintf(ConsoleColor(ConsoleColor::red), "Can't connect to socket %i\n",ec.value());
+		{   // An error occurred.
+			colorPrintf(ConsoleColor(ConsoleColor::red), "Can't connect to socket %i\n", ec.value());
 			mwssrm_mtx.unlock();
 			return NULL;
 		}
@@ -272,7 +251,9 @@ bool MWSSRobot::require(){
 	if (!is_aviable) {
 		return false;
 	}
-
+	if (!robot_socket.is_open()){
+		return false;
+	}
 	// set flag busy
 	is_aviable = false;
 	
@@ -420,7 +401,7 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 		}
 		default:
 			break;
-		}	
+		}
 		sendCommandForRobot();
 		robot_command_mtx.unlock();
 	}
