@@ -11,15 +11,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="messages.cpp" />
     <ClCompile Include="mwss_robot_module.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\TempRepo\module_headers\module.h" />
     <ClInclude Include="..\..\..\TempRepo\module_headers\robot_module.h" />
     <ClInclude Include="..\..\..\TempRepo\simpleini\SimpleIni.h" />
-    <ClInclude Include="define_section.h" />
-    <ClInclude Include="messages.h" />
     <ClInclude Include="mwss_robot_module.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

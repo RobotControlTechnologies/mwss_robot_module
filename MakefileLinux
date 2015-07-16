@@ -4,12 +4,10 @@ CCC=g++
 CXX=g++
 
 # Constants
-MODULE_HEADERS_DIR = "/home/mike/repo/module_headers_06_07_2015"
-SIMPLEINI_DIR = "/home/mike/repo/simpleini"
-BOOST_DIR = "/usr/include"
-BOOST_LIBS_DIR = "/usr/lib/i386-linux-gnu"
+MODULE_HEADERS_DIR = /var/lib/jenkins/workspace/module_headers/
+SIMPLEINI_DIR = /var/lib/jenkins/workspace/RCML_build/simpleini/
 
-INCLUDE_DIR_FLAGS = -I${MODULE_HEADERS_DIR} -I${SIMPLEINI_DIR} -I${BOOST_DIR}
+INCLUDE_DIR_FLAGS = -I${MODULE_HEADERS_DIR} -I${SIMPLEINI_DIR}
 
 FLAGS_MUTUAL = -Wall -m32 -std=c++11 ${INCLUDE_DIR_FLAGS} -MMD -MP -MF "${OBJECTDIR}/$@.d"
 
@@ -28,14 +26,14 @@ release: clean module
 clean:
 	@echo "-------------------------" 
 	rm -rf ${OBJECTDIR}
-
+  
 mwss_robot_module.o:  mwss_robot_module.cpp
 	@echo "-------------------------" 
 	mkdir -p ${OBJECTDIR}
 	rm -f "${OBJECTDIR}/$@.d"
 	$(COMPILE.cc) $(FLAGS) -o  ${OBJECTDIR}/mwss_robot_module.o mwss_robot_module.cpp
 
-module: mwss_robot_module.o 
+module: mwss_robot_module.o
 	@echo "-------------------------" 
 	mkdir -p ${OBJECTDIR}
-	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).so -L${BOOST_LIBS_DIR} -lboost_thread
+	${LINK.cc} -m32 -shared ${OBJECTDIR}/mwss_robot_module.o -o ${OBJECTDIR}/mwss_module_$(FILENAME_FIX).so -lboost_system -lboost_thread
