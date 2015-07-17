@@ -609,7 +609,7 @@ void MWSSRobot::sendCommandForRobotWithChangedMotorsState()
 void MWSSRobot::sendCommandForRobot(){
 	std::string temp_string("");
 	for (int i=1;i<17;i++){
-		temp_string.assign(std::to_string(command_for_robot[i]));
+		temp_string.assign(std::to_string((int)command_for_robot[i]));
 		temp_string.assign(" ");
 	}
 	colorPrintf(ConsoleColor(ConsoleColor::green), "send to robot: %s \n", temp_string.c_str());
