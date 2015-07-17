@@ -21,8 +21,10 @@
 #include "robot_module.h"
 #include "mwss_robot_module.h"
 
-#ifndef _MSC_VER
-	#include "stringC11.h"
+#ifdef _WIN32
+	#ifndef _MSC_VER
+		#include "stringC11.h"
+	#endif
 #endif
 
 extern std::string getConfigPath();
@@ -370,7 +372,7 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 			else {
 				command_for_robot[3] = 1;
 			}
-			command_for_robot[3] = (int)abs(value);
+			command_for_robot[8] = (int)abs(value);
 			break;
 		}
 		case 5:{ // RotateLeftWeapone
@@ -380,7 +382,7 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 			else {
 				command_for_robot[1] = 1;
 			}
-			command_for_robot[1] = (int)abs(value);
+			command_for_robot[6] = (int)abs(value);
 			break;
 		}
 		case 6:{ // RotateRightWeapone
@@ -390,7 +392,7 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 			else {
 				command_for_robot[2] = 1;
 			}
-			command_for_robot[2] = (int)abs(value);
+			command_for_robot[7] = (int)abs(value);
 			break;
 		}
 		case 7:{ // FireLeftWeapone
