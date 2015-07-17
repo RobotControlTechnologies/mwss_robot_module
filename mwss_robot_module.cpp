@@ -231,6 +231,7 @@ Robot* MWSSRobotModule::robotRequire(){
 			mwssrm_mtx.unlock();
 			return NULL;
 		}
+
 		if ((*i)->require()) {
 			mwssrm_mtx.unlock();
 			return (*i);
@@ -250,9 +251,11 @@ bool MWSSRobot::require(){
 	if (!is_aviable) {
 		return false;
 	}
+	
 	if (!robot_socket.is_open()){
 		return false;
 	}
+
 	// set flag busy
 	is_aviable = false;
 	
@@ -608,9 +611,9 @@ void MWSSRobot::sendCommandForRobotWithChangedMotorsState()
 
 void MWSSRobot::sendCommandForRobot(){
 	std::string temp_string("");
-	for (int i=1;i<17;i++){
-		temp_string.assign(std::to_string((int)command_for_robot[i]));
-		temp_string.assign(" ");
+	for (int i=0;i<19;i++){
+		temp_string.append(std::to_string((int)command_for_robot[i]));
+		temp_string.append(" ");
 	}
 	colorPrintf(ConsoleColor(ConsoleColor::green), "send to robot: %s \n", temp_string.c_str());
 	robot_socket.send(boost::asio::buffer(command_for_robot, 19));
