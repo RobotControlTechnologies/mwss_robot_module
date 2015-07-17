@@ -8,10 +8,6 @@
 #include <vector>
 #include <stdarg.h>
 
-#ifndef _MSC_VER
-	#include "stringC11.h"
-#endif
-
 #ifndef _WIN32
     #include <fcntl.h>
     #include <dlfcn.h>
@@ -24,6 +20,10 @@
 #include "module.h"
 #include "robot_module.h"
 #include "mwss_robot_module.h"
+
+#ifndef _MSC_VER
+	#include "stringC11.h"
+#endif
 
 extern std::string getConfigPath();
 
