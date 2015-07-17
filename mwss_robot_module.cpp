@@ -243,7 +243,6 @@ boost::system::error_code MWSSRobot::connect(){
 }
 
 bool MWSSRobot::require(){
-	colorPrintf(ConsoleColor(ConsoleColor::green), "Robot require\n");
 	if (!is_aviable) {
 		return false;
 	}
