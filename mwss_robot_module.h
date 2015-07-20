@@ -62,7 +62,7 @@ public:
 	// Constructor
 	MWSSRobot(boost::asio::ip::tcp::endpoint robot_endpoint);
 	void prepare(colorPrintfRobot_t *colorPrintf_p, colorPrintfRobotVA_t *colorPrintfVA_p);
-	FunctionResult* executeFunction(system_value command_index, void **args);
+	FunctionResult* executeFunction(CommandMode mode, system_value command_index, void **args);
 	void axisControl(system_value axis_index, variable_value value);
 	~MWSSRobot();
 
