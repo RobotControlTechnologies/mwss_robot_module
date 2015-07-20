@@ -96,18 +96,16 @@ void MWSSRobot::robotSleeperThread(Request *arg){
 		delete arg->next_request;
 	}
 	delete arg;
-
 }
 
 //// MACROS
-
 #define CREATE_THREAD_MACRO(NUM_MOTOR,MOTOR_STATE) \
 	robot_motors_state_mtx.lock(); \
 	motors_state_vector[NUM_MOTOR]->req = MOTOR_STATE; \
 	boost::thread *command_thread = new boost::thread(boost::bind(&MWSSRobot::robotSleeperThread, this, MOTOR_STATE)); \
 	motors_state_vector[NUM_MOTOR]->thread_pointer = command_thread; \
 	robot_motors_state_mtx.unlock(); \
-	if ((bool)*input4){ \
+	if (mode != CommandMode::not_wait){ \
 		command_thread->join(); \
 	};
 
@@ -123,41 +121,38 @@ axis_id++;
 ADD_ROBOT_AXIS("locked", 1, 0)\
 ADD_ROBOT_AXIS("MoveChassie", 255, -255)\
 ADD_ROBOT_AXIS("RotateChassie", 255, -255)\
-ADD_ROBOT_AXIS("RotateTurrel", 255, -255)\
-ADD_ROBOT_AXIS("RotateLeftWeapone", 255, -255)\
-ADD_ROBOT_AXIS("RotateRightWeapone", 255, -255)\
-ADD_ROBOT_AXIS("FireLeftWeapone", 1, 0)\
-ADD_ROBOT_AXIS("FireRightWeapone", 1, 0);
+ADD_ROBOT_AXIS("RotateTurrel", 10, -10)\
+ADD_ROBOT_AXIS("RotateLeftWeapon", 10, -10)\
+ADD_ROBOT_AXIS("RotateRightWeapon", 10, -10)\
+ADD_ROBOT_AXIS("FireLeftWeapon", 1, 0)\
+ADD_ROBOT_AXIS("FireRightWeapon", 1, 0);
 
 MWSSRobotModule::MWSSRobotModule() {
 	mwssrobot_functions = new FunctionData*[COUNT_MWSSROBOT_FUNCTIONS];
 	system_value function_id = 0;
 
-	FunctionData::ParamTypes *Params = new FunctionData::ParamTypes[4];
+	FunctionData::ParamTypes *Params = new FunctionData::ParamTypes[3];
 	Params[0] = FunctionData::ParamTypes::FLOAT;
 	Params[1] = FunctionData::ParamTypes::FLOAT;
 	Params[2] = FunctionData::ParamTypes::FLOAT;
-	Params[3] = FunctionData::ParamTypes::FLOAT;
 
-	mwssrobot_functions[function_id] = new FunctionData(function_id + 1, 4, Params, "moveChassie");
+	mwssrobot_functions[function_id] = new FunctionData(function_id + 1, 3, Params, "moveChassie");
 	function_id++;
 
-	Params = new FunctionData::ParamTypes[4];
+	Params = new FunctionData::ParamTypes[3];
 	Params[0] = FunctionData::ParamTypes::STRING;
 	Params[1] = FunctionData::ParamTypes::FLOAT;
 	Params[2] = FunctionData::ParamTypes::FLOAT;
-	Params[3] = FunctionData::ParamTypes::FLOAT;
 
-	mwssrobot_functions[function_id] = new FunctionData(function_id + 1, 4, Params, "moveTurrel");
+	mwssrobot_functions[function_id] = new FunctionData(function_id + 1, 3, Params, "moveTurrel");
 	function_id++;
 
-	Params = new FunctionData::ParamTypes[4];
+	Params = new FunctionData::ParamTypes[3];
 	Params[0] = FunctionData::ParamTypes::STRING;
 	Params[1] = FunctionData::ParamTypes::FLOAT;
 	Params[2] = FunctionData::ParamTypes::FLOAT;
-	Params[3] = FunctionData::ParamTypes::FLOAT;
 
-	mwssrobot_functions[function_id] = new FunctionData(function_id + 1, 4, Params, "fireWeapon");
+	mwssrobot_functions[function_id] = new FunctionData(function_id + 1, 3, Params, "fireWeapon");
 
 	robot_axis = new AxisData*[COUNT_AXIS];
 	system_value axis_id = 0;
@@ -375,7 +370,7 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 			command_for_robot[8] = (int)abs(value);
 			break;
 		}
-		case 5:{ // RotateLeftWeapone
+		case 5:{ // RotateLeftWeapon
 			if (value >= 0) {
 				command_for_robot[1] = 0;
 			}
@@ -385,7 +380,7 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 			command_for_robot[6] = (int)abs(value);
 			break;
 		}
-		case 6:{ // RotateRightWeapone
+		case 6:{ // RotateRightWeapon
 			if (value >= 0) {
 				command_for_robot[2] = 0;
 			}
@@ -395,11 +390,11 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value){
 			command_for_robot[7] = (int)abs(value);
 			break;
 		}
-		case 7:{ // FireLeftWeapone
+		case 7:{ // FireLeftWeapon
 			command_for_robot[11] = (value) ? 1 : 0;
 			break;
 		}
-		case 8:{ // FireRightWeapone
+		case 8:{ // FireRightWeapon
 			command_for_robot[12] = (value) ? 1 : 0;
 			break;
 		}
@@ -416,7 +411,7 @@ void *MWSSRobotModule::writePC(unsigned int *buffer_length) {
 	return NULL;
 }
 
-FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args) {
+FunctionResult* MWSSRobot::executeFunction(CommandMode mode, system_value functionId, void **args) {
 	try {
 		switch (functionId) {
 		case ROBOT_COMMAND_FREE:{
@@ -465,7 +460,6 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			if (!isSpeed(*input2)){ throw std::exception(); }
 			variable_value *input3 = (variable_value *)args[2];
 			if (!isTime(*input3)) { throw std::exception(); }
-			variable_value *input4 = (variable_value *)args[3];
 
 			Request *left_motor, *right_motor;
 			right_motor = new Request((int)*input2, 0, motors_state_vector[4], NULL);
@@ -498,7 +492,6 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			if (!isSpeed(*input2)){ throw std::exception(); }
 			variable_value *input3 = (variable_value *)args[2];
 			if (!isTime(*input3)) { throw std::exception(); }
-			variable_value *input4 = (variable_value *)args[3];
 
 			Request *turrel_motor;
 			turrel_motor = new Request((int)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
@@ -526,7 +519,6 @@ FunctionResult* MWSSRobot::executeFunction(system_value functionId, void **args)
 			if (!isSpeed(*input2)){ throw std::exception(); }
 			variable_value *input3 = (variable_value *)args[2];
 			if (!isTime(*input3)) { throw std::exception(); }
-			variable_value *input4 = (variable_value *)args[3];
 
 			Request *weapon_motor;
 			weapon_motor = new Request((bool)*input2, (int)*input3, motors_state_vector[num_motor], NULL);
@@ -662,7 +654,7 @@ robot_endpoint(robot_endpoint)
 	/// 4 - 5 chassie Relay         L R 
 	/// 6 - 8 turrel motors power   L R D
 	/// 9 - 10 chassie motors power L R
-	/// 11 - 12 weapone relay       L R
+	/// 11 - 12 weapon relay       L R
 	/// 13 - 15 turrel scalers		L R D  
 	/// 16 - 17 chassie scalers		L R
 	/// 18 - last byte
