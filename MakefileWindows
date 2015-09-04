@@ -2,8 +2,8 @@
 CC=g++
 CCC=g++
 CXX=g++
-RM = "C:\msys\1.0\bin\rm.exe"
-MKDIR = "C:\msys\1.0\bin\mkdir.exe"
+RM = "C:\MinGW\msys\1.0\bin\rm.exe"
+MKDIR = "C:\MinGW\msys\1.0\bin\mkdir.exe"
 
 # Constants
 MODULE_HEADERS_DIR = "C:\Program Files (x86)\Jenkins\workspace\module_headers"
