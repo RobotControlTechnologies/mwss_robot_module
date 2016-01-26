@@ -30,6 +30,8 @@
 extern std::string getConfigPath();
 
 ///////// Global Variables
+#define IID "RCT.Mwss_robot_module_v100"
+
 const unsigned int COUNT_MWSSROBOT_FUNCTIONS = 3;
 const unsigned int COUNT_AXIS = 8;
 
@@ -129,6 +131,14 @@ ADD_ROBOT_AXIS("FireLeftWeapon", 1, 0) \
 ADD_ROBOT_AXIS("FireRightWeapon", 1, 0);
 
 MWSSRobotModule::MWSSRobotModule() {
+#ifndef ROBOT_MODULE_H_000
+  mi = new ModuleInfo;
+  mi->uid = IID;
+  mi->mode = ModuleInfo::Modes::PROD;
+  mi->version = BUILD_NUMBER;
+  mi->digest = NULL;
+#endif
+
   mwssrobot_functions = new FunctionData *[COUNT_MWSSROBOT_FUNCTIONS];
   system_value function_id = 0;
 
@@ -168,7 +178,11 @@ void MWSSRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
   this->colorPrintf_p = colorPrintfVA_p;
 }
 
-const char *MWSSRobotModule::getUID() { return "mwssrobot_functions_dll"; };
+#ifdef ROBOT_MODULE_H_000
+const char *MWSSRobotModule::getUID() { return IID; }
+#else
+const struct ModuleInfo &MWSSRobotModule::getModuleInfo() { return *mi; }
+#endif
 
 FunctionData **MWSSRobotModule::getFunctions(unsigned int *count_functions) {
   *count_functions = COUNT_MWSSROBOT_FUNCTIONS;
@@ -298,6 +312,9 @@ void MWSSRobotModule::final() {
 };
 
 void MWSSRobotModule::destroy() {
+#ifndef ROBOT_MODULE_H_000
+  delete mi;
+#endif
   for (unsigned int j = 0; j < COUNT_MWSSROBOT_FUNCTIONS; ++j) {
     if (mwssrobot_functions[j]->count_params) {
       delete[] mwssrobot_functions[j]->params;
@@ -411,6 +428,7 @@ void *MWSSRobotModule::writePC(unsigned int *buffer_length) {
 FunctionResult *MWSSRobot::executeFunction(CommandMode mode,
                                            system_value functionId,
                                            void **args) {
+  FunctionResult *fr = NULL;
   try {
     switch (functionId) {
       case ROBOT_COMMAND_FREE: {
@@ -543,10 +561,19 @@ FunctionResult *MWSSRobot::executeFunction(CommandMode mode,
         break;
       }
     };
-    return new FunctionResult(1);
+#ifdef ROBOT_MODULE_H_000
+      fr = new FunctionResult(1);
+#else
+      fr = new FunctionResult(FunctionResult::Types::VALUE, 0);
+#endif
   } catch (...) {
-    return new FunctionResult(0);
+#ifdef ROBOT_MODULE_H_000
+      fr = new FunctionResult(0);
+#else
+      fr = new FunctionResult(FunctionResult::Types::EXCEPTION);
+#endif
   };
+  return fr;
 };
 
 int MWSSRobotModule::startProgram(int uniq_index) { return 0; }
@@ -683,3 +710,9 @@ MWSSRobot::~MWSSRobot() {
     delete motors_state_vector[i];
   }
 }
+
+#ifndef ROBOT_MODULE_H_000
+PREFIX_FUNC_DLL unsigned short getRobotModuleApiVersion() {
+  return ROBOT_MODULE_API_VERSION;
+};
+#endif
