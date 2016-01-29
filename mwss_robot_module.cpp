@@ -131,13 +131,11 @@ ADD_ROBOT_AXIS("FireLeftWeapon", 1, 0) \
 ADD_ROBOT_AXIS("FireRightWeapon", 1, 0);
 
 MWSSRobotModule::MWSSRobotModule() {
-#ifndef ROBOT_MODULE_H_000
   mi = new ModuleInfo;
   mi->uid = IID;
   mi->mode = ModuleInfo::Modes::PROD;
   mi->version = BUILD_NUMBER;
   mi->digest = NULL;
-#endif
 
   mwssrobot_functions = new FunctionData *[COUNT_MWSSROBOT_FUNCTIONS];
   system_value function_id = 0;
@@ -178,11 +176,7 @@ void MWSSRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
   this->colorPrintf_p = colorPrintfVA_p;
 }
 
-#ifdef ROBOT_MODULE_H_000
-const char *MWSSRobotModule::getUID() { return IID; }
-#else
 const struct ModuleInfo &MWSSRobotModule::getModuleInfo() { return *mi; }
-#endif
 
 FunctionData **MWSSRobotModule::getFunctions(unsigned int *count_functions) {
   *count_functions = COUNT_MWSSROBOT_FUNCTIONS;
@@ -312,9 +306,7 @@ void MWSSRobotModule::final() {
 };
 
 void MWSSRobotModule::destroy() {
-#ifndef ROBOT_MODULE_H_000
   delete mi;
-#endif
   for (unsigned int j = 0; j < COUNT_MWSSROBOT_FUNCTIONS; ++j) {
     if (mwssrobot_functions[j]->count_params) {
       delete[] mwssrobot_functions[j]->params;
@@ -561,17 +553,9 @@ FunctionResult *MWSSRobot::executeFunction(CommandMode mode,
         break;
       }
     };
-#ifdef ROBOT_MODULE_H_000
-      fr = new FunctionResult(1);
-#else
-      fr = new FunctionResult(FunctionResult::Types::VALUE, 0);
-#endif
+    fr = new FunctionResult(FunctionResult::Types::VALUE, 0);
   } catch (...) {
-#ifdef ROBOT_MODULE_H_000
-      fr = new FunctionResult(0);
-#else
-      fr = new FunctionResult(FunctionResult::Types::EXCEPTION);
-#endif
+    fr = new FunctionResult(FunctionResult::Types::EXCEPTION);
   };
   return fr;
 };
@@ -711,8 +695,6 @@ MWSSRobot::~MWSSRobot() {
   }
 }
 
-#ifndef ROBOT_MODULE_H_000
 PREFIX_FUNC_DLL unsigned short getRobotModuleApiVersion() {
   return ROBOT_MODULE_API_VERSION;
 };
-#endif
