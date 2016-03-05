@@ -696,5 +696,5 @@ MWSSRobot::~MWSSRobot() {
 }
 
 PREFIX_FUNC_DLL unsigned short getRobotModuleApiVersion() {
-  return ROBOT_MODULE_API_VERSION;
+  return MODULE_API_VERSION;
 };
