@@ -7,7 +7,7 @@ MKDIR = "C:\MinGW\msys\1.0\bin\mkdir.exe"
 
 # Constants
 MODULE_HEADERS_DIR = "C:\Program Files (x86)\Jenkins\workspace\module_headers\100"
-SIMPLEINI_DIR = "C:\Program Files (x86)\Jenkins\workspace\RCML_build\simpleini"
+SIMPLEINI_DIR = "C:\Program Files (x86)\Jenkins\workspace\simpleini"
 BOOST_DIR = "C:\boost_1_60_0"
 BOOST_DIR_LIBS = "C:\boost_1_60_0\stage\lib"
 
