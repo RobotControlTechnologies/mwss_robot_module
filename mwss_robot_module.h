@@ -87,11 +87,13 @@ class MWSSRobotModule : public RobotModule {
   AxisData **robot_axis;
   colorPrintfModuleVA_t *colorPrintf_p;
 
+  ModuleInfo *mi;
+
  public:
   MWSSRobotModule();
 
   // init
-  const char *getUID();
+  const struct ModuleInfo &getModuleInfo();
   void prepare(colorPrintfModule_t *colorPrintf_p,
                colorPrintfModuleVA_t *colorPrintfVA_p);
 
