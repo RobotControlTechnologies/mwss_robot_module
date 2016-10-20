@@ -28,7 +28,6 @@ set_property(TARGET ${PROJECT} PROPERTY CXX_STANDARD 11)
 
 target_compile_options(${PROJECT} PRIVATE
   -Wall -Werror
-  -pedantic
   -fno-strict-aliasing
 )
 
@@ -65,7 +64,7 @@ set(MODULE_HEADERS_PATH_INTERNAL ${MODULE_HEADERS_PATH} CACHE INTERNAL "" FORCE)
 
 find_path(MODULE_HEADERS_DIR NAMES "current/module.h" PATHS ${MODULE_HEADERS_PATH} NO_DEFAULT_PATH)
 if(MODULE_HEADERS_DIR)
-  target_include_directories(${PROJECT} PRIVATE "${MODULE_HEADERS_DIR}/000")
+  target_include_directories(${PROJECT} PRIVATE "${MODULE_HEADERS_DIR}/100")
 else()
   message(SEND_ERROR "Please set MODULE_HEADERS_PATH, current value: ${MODULE_HEADERS_PATH}")
 endif()
@@ -87,6 +86,41 @@ if(SIMPLE_INI_DIR)
   target_include_directories(${PROJECT} PRIVATE ${SIMPLE_INI_DIR})
 else()
   message(SEND_ERROR "Please set SIMPLE_INI_PATH, current value: ${SIMPLE_INI_PATH}")
+endif()
+
+###############################
+## Boost
+###############################
+if (NOT BOOST_ROOT)
+  set(BOOST_ROOT "../../../libraries/3rdparty/boost")
+endif()
+
+if (NOT BOOST_ROOT STREQUAL BOOST_ROOT_INTERNAL)
+  unset(Boost_FOUND)
+  unset(Boost_INCLUDE_DIRS)
+  unset(Boost_LIBRARIES)
+endif()
+set(BOOST_ROOT_INTERNAL ${BOOST_ROOT} CACHE INTERNAL "" FORCE)
+
+set(Boost_USE_STATIC_LIBS ON)
+set(Boost_NO_BOOST_CMAKE ON)
+
+set(BOOST_COMPONENTS)
+list(APPEND BOOST_COMPONENTS thread)
+
+find_package(Boost 1.60.0 COMPONENTS ${BOOST_COMPONENTS})
+if(Boost_FOUND)
+  target_include_directories(${PROJECT} PRIVATE ${Boost_INCLUDE_DIRS})
+  target_link_libraries(${PROJECT} PRIVATE ${Boost_LIBRARIES})
+  if(WIN32)
+    target_link_libraries(${PROJECT} PRIVATE ws2_32)
+    target_compile_definitions(${PROJECT} PRIVATE
+      _WIN32_WINNT=0x0501
+      WINVER=0x0501
+    )
+  endif(WIN32)
+else()
+  message(SEND_ERROR "Please set or correct BOOST_ROOT, current value: ${BOOST_ROOT}")
 endif()
 
 #################################################################################
