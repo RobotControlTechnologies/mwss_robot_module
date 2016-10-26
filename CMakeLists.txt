@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.4 FATAL_ERROR)
-set(PROJECT mvss_module)
+set(PROJECT mwss_module)
 project(${PROJECT} LANGUAGES CXX)
 
 if(NOT BUILD_NUMBER)
