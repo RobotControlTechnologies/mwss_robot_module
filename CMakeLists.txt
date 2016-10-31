@@ -10,9 +10,14 @@ endif()
 # Sources
 #################################################################################
 set(SOURCES
-  src/config.cpp
   src/mwss_robot_module.cpp
 )
+
+if(WIN32)
+  list(APPEND SOURCES
+    src/config.cpp
+  )
+endif(WIN32)
 
 add_library(${PROJECT} SHARED ${SOURCES})
 
