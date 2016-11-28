@@ -10,6 +10,14 @@
 #define ROBOT_COMMAND_HAND_CONTROL_BEGIN -1
 #define ROBOT_COMMAND_HAND_CONTROL_END -2
 
+#include <module.h>
+#include <robot_module.h>
+
+#include <boost/asio.hpp>
+#include <boost/thread/thread.hpp>
+
+#include <vector>
+
 //////////// Service FUNCTIONS and STRUCTURES
 struct MotorState;
 struct Request;

@@ -3,6 +3,15 @@
 * Author: m79lol, iskinmike
 *
 */
+#include "mwss_robot_module.h"
+
+#include <SimpleIni.h>
+
+#ifdef _WIN32
+#ifndef _MSC_VER
+#include "stringC11.h"
+#endif
+#endif
 
 #include <string>
 #include <vector>
@@ -11,20 +20,6 @@
 #ifndef _WIN32
 #include <fcntl.h>
 #include <dlfcn.h>
-#endif
-
-#include <boost/asio.hpp>
-#include <boost/thread/thread.hpp>
-
-#include "SimpleIni.h"
-#include "module.h"
-#include "robot_module.h"
-#include "mwss_robot_module.h"
-
-#ifdef _WIN32
-#ifndef _MSC_VER
-#include "stringC11.h"
-#endif
 #endif
 
 extern std::string getConfigPath();
@@ -60,7 +55,7 @@ bool isMotor(char motor) {
     }
     default: { return false; }
   }
-};
+}
 
 //// Threads
 void MWSSRobot::robotSleeperThread(Request *arg) {
@@ -103,7 +98,7 @@ void MWSSRobot::robotSleeperThread(Request *arg) {
   robot_motors_state_mtx.unlock();                                     \
   if (mode != CommandMode::not_wait) {                                 \
     command_thread->join();                                            \
-  };
+  }
 
 #define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
   \
@@ -169,7 +164,7 @@ MWSSRobotModule::MWSSRobotModule() {
   robot_axis = new AxisData *[COUNT_AXIS];
   system_value axis_id = 0;
   DEFINE_ALL_AXIS
-};
+}
 
 void MWSSRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
                               colorPrintfModuleVA_t *colorPrintfVA_p) {
@@ -229,7 +224,7 @@ int MWSSRobotModule::init() {
   aviable_connections.push_back(MWSS_robot);
 
   return 0;
-};
+}
 
 Robot *MWSSRobotModule::robotRequire() {
   mwssrm_mtx.lock();
@@ -250,7 +245,7 @@ Robot *MWSSRobotModule::robotRequire() {
   }
   mwssrm_mtx.unlock();
   return NULL;
-};
+}
 
 boost::system::error_code MWSSRobot::connect() {
   boost::system::error_code ec;
@@ -271,7 +266,7 @@ bool MWSSRobot::require() {
   is_aviable = false;
 
   return true;
-};
+}
 
 void MWSSRobotModule::robotFree(Robot *robot) {
   MWSSRobot *MWSS_robot = reinterpret_cast<MWSSRobot *>(robot);
@@ -285,7 +280,7 @@ void MWSSRobotModule::robotFree(Robot *robot) {
     }
   }
   mwssrm_mtx.unlock();
-};
+}
 
 void MWSSRobot::free() {
   if (is_aviable) {
@@ -293,7 +288,7 @@ void MWSSRobot::free() {
   }
   is_aviable = true;
   robot_socket.close();
-};
+}
 
 void MWSSRobotModule::final() {
   mwssrm_mtx.lock();
@@ -303,7 +298,7 @@ void MWSSRobotModule::final() {
   }
   aviable_connections.clear();
   mwssrm_mtx.unlock();
-};
+}
 
 void MWSSRobotModule::destroy() {
   delete mi;
@@ -319,12 +314,12 @@ void MWSSRobotModule::destroy() {
   delete[] robot_axis;
   delete[] mwssrobot_functions;
   delete this;
-};
+}
 
 AxisData **MWSSRobotModule::getAxis(unsigned int *count_axis) {
   (*count_axis) = COUNT_AXIS;
   return robot_axis;
-};
+}
 
 void MWSSRobot::axisControl(system_value axis_index, variable_value value) {
   bool need_send = false;
@@ -410,7 +405,7 @@ void MWSSRobot::axisControl(system_value axis_index, variable_value value) {
     sendCommandForRobot();
     robot_command_mtx.unlock();
   }
-};
+}
 
 void *MWSSRobotModule::writePC(unsigned int *buffer_length) {
   *buffer_length = 0;
@@ -552,13 +547,13 @@ FunctionResult *MWSSRobot::executeFunction(CommandMode mode,
 
         break;
       }
-    };
+    }
     fr = new FunctionResult(FunctionResult::Types::VALUE, 0);
   } catch (...) {
     fr = new FunctionResult(FunctionResult::Types::EXCEPTION);
-  };
+  }
   return fr;
-};
+}
 
 int MWSSRobotModule::startProgram(int uniq_index) { return 0; }
 
@@ -568,7 +563,7 @@ int MWSSRobotModule::endProgram(int uniq_index) { return 0; }
 
 PREFIX_FUNC_DLL RobotModule *getRobotModuleObject() {
   return new MWSSRobotModule();
-};
+}
 
 void MWSSRobot::sendCommandForRobotWithChangedMotorsState() {
   // Пробегает по motors_state_vector и в соответствии с ним собирает сообщение
@@ -630,7 +625,7 @@ void MWSSRobot::sendCommandForRobot() {
   colorPrintf(ConsoleColor(ConsoleColor::green), "send to robot: %s \n",
               temp_string.c_str());
   robot_socket.send(boost::asio::buffer(command_for_robot, 19));
-};
+}
 
 void MWSSRobot::prepare(colorPrintfRobot_t *colorPrintf_p,
                         colorPrintfRobotVA_t *colorPrintfVA_p) {
@@ -687,7 +682,7 @@ MWSSRobot::MWSSRobot(boost::asio::ip::tcp::endpoint robot_endpoint)
   command_for_robot[16] = 15;
   command_for_robot[17] = 15;
   command_for_robot[18] = 0x7F;
-};
+}
 MWSSRobot::~MWSSRobot() {
   delete[] uniq_name;
   for (int i = 0; i < 7; i++) {  // We have 7 "motors"
@@ -697,4 +692,4 @@ MWSSRobot::~MWSSRobot() {
 
 PREFIX_FUNC_DLL unsigned short getRobotModuleApiVersion() {
   return MODULE_API_VERSION;
-};
+}
